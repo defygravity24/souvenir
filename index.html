@@ -273,17 +273,36 @@
 
   /* ---------- Trip list ---------- */
   .trip-card {
-    display: block; width: calc(100% - 32px); text-align: left;
-    margin: 8px 16px;
-    padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+    width: calc(100% - 32px); text-align: left;
+    margin: 6px 16px;
+    padding: 9px 12px 9px 10px;
     background: var(--bg);
     border: 1px solid var(--line);
+    border-left-width: 4px;
     border-radius: 10px;
+    cursor: pointer;
   }
-  .trip-card:hover { border-color: var(--accent); }
-  .trip-card .t-name { font-weight: 600; font-size: 1rem; color: var(--ink); }
-  .trip-card .t-meta { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
-  .trip-card .t-count { font-size: 0.78rem; color: var(--faint); margin-top: 4px; }
+  .trip-card:hover { background: var(--accent-soft); }
+  .t-thumb {
+    width: 52px; height: 52px; border-radius: 9px; flex-shrink: 0;
+    background: var(--accent-soft); background-size: cover; background-position: center;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent); font-size: 1.15rem;
+  }
+  .t-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .trip-card .t-name {
+    font-weight: 600; font-size: 0.95rem; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .trip-card .t-meta {
+    font-size: 0.78rem; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .trip-card .t-desc {
+    font-size: 0.75rem; color: var(--faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .new-trip-wrap { padding: 12px 16px 4px; }
 
   /* ---------- Detail / Add card ---------- */
@@ -456,9 +475,9 @@
     content: ''; position: absolute; inset: 3px;
     border: 1px solid var(--ink-c); border-radius: 6px; opacity: 0.55;
   }
-  .stamp-btn:nth-child(2n) .stamp-box { transform: rotate(1.8deg); --ink-c: var(--cat-see); }
-  .stamp-btn:nth-child(3n) .stamp-box { --ink-c: var(--cat-eat); transform: rotate(-1.2deg); }
-  .stamp-btn:nth-child(4n) .stamp-box { --ink-c: var(--cat-stay); transform: rotate(2.4deg); }
+  .stamp-btn:nth-child(2n) .stamp-box { transform: rotate(1.8deg); }
+  .stamp-btn:nth-child(3n) .stamp-box { transform: rotate(-1.2deg); }
+  .stamp-btn:nth-child(4n) .stamp-box { transform: rotate(2.4deg); }
   .stamp-air { font-size: 1.05rem; line-height: 1; }
   .stamp-n {
     font-size: 0.64rem; font-weight: 700;
@@ -470,7 +489,7 @@
 
   /* ---------- Trip calendar ---------- */
   .trips-toggle { display: flex; gap: 6px; padding: 12px 16px 4px; }
-  .cal { padding: 4px 16px 12px; max-width: 340px; }
+  .cal { padding: 4px 16px 12px; }
   .cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
   .cal-head .cal-title { flex: 1; text-align: center; font-weight: 600; font-size: 0.9rem; }
   .cal-head button {
@@ -657,7 +676,7 @@
     eat:  { label: 'Eat',      color: '#C2502E' },
     shop: { label: 'Shop',     color: '#C08A1E' },
     see:  { label: 'See',      color: '#3E6FB0' },
-    do:   { label: 'Do',       color: '#2E8C86' },
+    do:   { label: 'Experience', color: '#2E8C86' },
     stay: { label: 'Stay',     color: '#7A599E' },
     out:  { label: 'Outdoors', color: '#4E8A46' }
   };
@@ -1192,6 +1211,19 @@
     return p.city ? (p.city + (p.country ? ', ' + p.country : '')) : (p.country || 'Somewhere on Earth');
   }
 
+  // Every country gets its own consistent color (trip cards, city headers, passport stamps)
+  var COUNTRY_COLORS = ['#1E6E52', '#3E6FB0', '#C2502E', '#7A599E', '#C08A1E', '#2E8C86', '#B03A5B', '#5B7F2A', '#8A5A2A', '#2F6B8A'];
+  function countryColor(name) {
+    if (!name) return '#8A968F';
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return COUNTRY_COLORS[h % COUNTRY_COLORS.length];
+  }
+  function tripCountry(t) {
+    var p = places.find(function (x) { return x.tripId === t.id && x.country; });
+    return p ? p.country : '';
+  }
+
   function grouped() {
     var groups = {};
     visiblePlaces().forEach(function (p) {
@@ -1334,9 +1366,12 @@
     } else {
       var q = view.findText.trim().toLowerCase();
       grouped().forEach(function (g) {
+        var gCountry = g.items[0] ? g.items[0].country : '';
         html += '<div class="city-group"><div class="city-head-row">' +
           '<button class="city-title" data-city="' + esc(g.city) + '" title="Zoom to ' + esc(g.city) + '" ' +
-          'style="border:none;background:none;text-align:left;cursor:pointer;">' + esc(g.city) +
+          'style="border:none;background:none;text-align:left;cursor:pointer;">' +
+          '<span class="cdot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + countryColor(gCountry) + ';margin-right:7px;"></span>' +
+          esc(g.city) +
           ' <span class="n">' + g.items.length + '</span></button>' +
           '<button class="guide-btn" data-guide="' + esc(g.city) + '" title="Download a shareable guide to ' + esc(g.city) + '">Guide ↓</button>' +
           '</div>';
@@ -1467,13 +1502,32 @@
 
   function tripCardHtml(t) {
     var st = tripStats(t);
-    return '<button class="trip-card" data-trip="' + t.id + '">' +
+    var cc = countryColor(tripCountry(t));
+    var thumbId = '';
+    for (var i = 0; i < st.list.length && !thumbId; i++) {
+      if (st.list[i].photos && st.list[i].photos.length) thumbId = st.list[i].photos[0];
+    }
+    var cities = {};
+    st.list.forEach(function (p) { if (p.city) cities[p.city] = 1; });
+    var cityStr = Object.keys(cities).slice(0, 3).join(' · ');
+    var desc = st.places
+      ? [cityStr, st.places + (st.places === 1 ? ' place' : ' places')].filter(Boolean).join(' — ')
+      : (t.notes ? t.notes.slice(0, 60) : 'No places yet');
+    return '<button class="trip-card" data-trip="' + t.id + '" style="border-left-color:' + cc + ';">' +
+      '<span class="t-thumb"' + (thumbId ? ' data-thumb="' + thumbId + '"' : '') + '>✈</span>' +
+      '<span class="t-body">' +
       '<span class="t-name">' + esc(t.name) + '</span>' +
-      '<div class="t-meta">' + esc([tripWhenLabel(t), t.companions ? 'with ' + t.companions : ''].filter(Boolean).join(' · ')) + '</div>' +
-      '<div class="t-count">' + st.places + (st.places === 1 ? ' place' : ' places') +
-      (st.memories ? ' · ' + st.memories + (st.memories === 1 ? ' memory' : ' memories') : '') +
-      (st.photos ? ' · ' + st.photos + (st.photos === 1 ? ' photo' : ' photos') : '') +
-      '</div></button>';
+      '<span class="t-meta">' + esc([tripWhenLabel(t), t.companions ? 'with ' + t.companions : ''].filter(Boolean).join(' · ')) + '</span>' +
+      '<span class="t-desc">' + esc(desc) + '</span>' +
+      '</span></button>';
+  }
+
+  function fillTripThumbs() {
+    body.querySelectorAll('.t-thumb[data-thumb]').forEach(function (el) {
+      photoUrl(el.getAttribute('data-thumb')).then(function (url) {
+        if (url) { el.style.backgroundImage = 'url(' + url + ')'; el.textContent = ''; }
+      });
+    });
   }
 
   function renderTripList() {
@@ -1548,6 +1602,7 @@
         render();
       });
     });
+    fillTripThumbs();
     wireCalendar();
   }
 
@@ -2000,7 +2055,7 @@
       html += '<div class="stamp-grid">';
       countryList.forEach(function (c) {
         html += '<button class="stamp-btn" data-country="' + esc(c) + '">' +
-          '<span class="stamp-box"><span class="stamp-air">✈</span>' +
+          '<span class="stamp-box" style="--ink-c:' + countryColor(c) + ';"><span class="stamp-air">✈</span>' +
           '<span class="stamp-n">' + countries[c] + (countries[c] === 1 ? ' place' : ' places') + '</span></span>' +
           '<span class="stamp-country">' + esc(c) + '</span>' +
           '</button>';
@@ -2094,6 +2149,7 @@
     body.querySelectorAll('[data-open]').forEach(function (el) {
       el.addEventListener('click', function () { openPlace(el.getAttribute('data-open')); });
     });
+    fillTripThumbs();
   }
 
   // ----- Trip wrap (shareable recap) -----
@@ -2252,7 +2308,7 @@
       faqItem('How do I pin a beach or a spot with no name?', 'Tap ＋ → “Pin the center of the map,” or just tap the map when you’re zoomed in. Name it whatever you like — “that perfect beach.”') +
       faqItem('What’s the ✨ button?', 'Zoom into a neighborhood and tap ✨ — restaurants, shops and hotels around you appear as gold dots with ratings. Tap a dot to add it. Tap ✨ again to clear them.') +
       faqItem('Is my data safe? What if I get a new phone?', 'Tap Export (bottom of the list) — it saves one file with everything: places, memories, trips, and photos. Import it on any device and it all comes back. Export once in a while as a backup.') +
-      faqItem('What do the colors mean?', 'Red = Eat · Gold = Shop · Blue = See · Teal = Do (tours, shows, experiences) · Purple = Stay · Green = Outdoors. Gray pins are places on your “Want to go” list.') +
+      faqItem('What do the colors mean?', 'Red = Eat · Gold = Shop · Blue = See · Teal = Experience (tours, shows, safaris) · Purple = Stay · Green = Outdoors. Gray pins are places on your “Want to go” list. Trip cards and city names are tinted by country.') +
       '</div>' +
 
       '<div><span class="field-label">Show me again</span><div class="btn-row">' +

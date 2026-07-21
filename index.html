@@ -455,7 +455,7 @@
 <div class="topbar">
   <span class="logo">🧭 Souvenir</span>
   <div class="searchbox">
-    <input id="search" type="text" placeholder="Search a restaurant, shop, museum, anywhere…" autocomplete="off">
+    <input id="search" type="text" placeholder="Search a city, restaurant, shop, museum, anywhere…" autocomplete="off">
     <div class="search-results" id="results"></div>
   </div>
   <span class="stats" id="stats"></span>
@@ -680,7 +680,7 @@
 
   // ---------- Map ----------
   var map = L.map('map', { zoomControl: true, worldCopyJump: true }).setView([30, 10], 2);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
     subdomains: 'abcd', maxZoom: 20
   }).addTo(map);
@@ -712,6 +712,11 @@
 
   map.on('click', function (e) {
     if (view.mode === 'add') return;
+    // Zoomed out = navigation, not pinning: fly toward the click instead of opening the add card
+    if (map.getZoom() < 12) {
+      map.flyTo(e.latlng, Math.min(map.getZoom() + 3, 13), { duration: 0.7 });
+      return;
+    }
     startDraft({ name: '', lat: e.latlng.lat, lng: e.latlng.lng, city: '', country: '', custom: true });
     reverseGeocode(e.latlng.lat, e.latlng.lng);
   });
@@ -722,7 +727,8 @@
       .then(function (d) {
         if (view.mode !== 'add' || !view.draft || view.draft.lat !== lat) return;
         var a = d.address || {};
-        view.draft.city = a.city || a.town || a.village || a.municipality || a.county || '';
+        view.draft.city = a.city || a.town || a.village || a.municipality || a.suburb ||
+          a.county || a.state_district || a.state || '';
         view.draft.country = a.country || '';
         var sub = document.getElementById('draftSub');
         if (sub) sub.textContent = draftSubText();
@@ -785,12 +791,17 @@
       .then(function (rows) {
         return rows.map(function (r) {
           var a = r.address || {};
+          var isPlaceType = r.category === 'place' &&
+            ['city', 'town', 'village', 'municipality', 'suburb', 'hamlet', 'state', 'country', 'island'].indexOf(r.type) !== -1;
+          var isCity = isPlaceType || r.type === 'administrative';
           return {
             name: r.name || (r.display_name || '').split(',')[0],
             lat: parseFloat(r.lat), lng: parseFloat(r.lon),
             city: a.city || a.town || a.village || a.municipality || a.county || '',
             country: a.country || '',
-            kind: r.type ? r.type.replace(/_/g, ' ') : ''
+            kind: isCity ? (r.type === 'country' ? 'country' : 'city / region') : (r.type ? r.type.replace(/_/g, ' ') : ''),
+            isCity: isCity,
+            cityZoom: r.type === 'country' ? 5 : (r.type === 'state' || r.type === 'administrative' ? 8 : 12)
           };
         });
       });
@@ -802,7 +813,7 @@
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': gkey(),
-        'X-Goog-FieldMask': 'places.displayName,places.location,places.addressComponents,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryTypeDisplayName'
+        'X-Goog-FieldMask': 'places.displayName,places.location,places.addressComponents,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryTypeDisplayName,places.types'
       },
       body: JSON.stringify({ textQuery: q, pageSize: 7 })
     }).then(function (r) {
@@ -814,12 +825,20 @@
           var c = (p.addressComponents || []).find(function (x) { return (x.types || []).indexOf(type) !== -1; });
           return c ? c.longText : '';
         };
+        var types = p.types || [];
+        var cityTypes = ['locality', 'sublocality', 'postal_town', 'administrative_area_level_1',
+          'administrative_area_level_2', 'administrative_area_level_3', 'country', 'continent'];
+        var isCity = types.some(function (t) { return cityTypes.indexOf(t) !== -1; });
         return {
           name: p.displayName ? p.displayName.text : 'Unnamed',
           lat: p.location.latitude, lng: p.location.longitude,
           city: comp('locality') || comp('postal_town') || comp('administrative_area_level_1') || '',
           country: comp('country') || '',
-          kind: p.primaryTypeDisplayName ? p.primaryTypeDisplayName.text : '',
+          kind: isCity ? (types.indexOf('country') !== -1 ? 'country' : 'city / region')
+            : (p.primaryTypeDisplayName ? p.primaryTypeDisplayName.text : ''),
+          isCity: isCity,
+          cityZoom: types.indexOf('country') !== -1 ? 5 :
+            (types.indexOf('administrative_area_level_1') !== -1 ? 8 : 12),
           gRating: p.rating || null,
           gCount: p.userRatingCount || null,
           gMapsUri: p.googleMapsUri || null
@@ -844,6 +863,12 @@
       btn.addEventListener('click', function () {
         closeResults();
         searchInput.value = '';
+        if (r.isCity) {
+          // Cities navigate the map; places get pinned
+          map.flyTo([r.lat, r.lng], r.cityZoom || 12, { duration: 0.9 });
+          toast('Welcome to ' + r.name + ' — search a place or tap the map to pin');
+          return;
+        }
         startDraft({
           name: r.name, lat: r.lat, lng: r.lng, city: r.city, country: r.country,
           custom: false, gRating: r.gRating, gCount: r.gCount, gMapsUri: r.gMapsUri

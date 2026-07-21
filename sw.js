@@ -1,5 +1,5 @@
 /* Souvenir service worker — app shell offline + opportunistic map-tile cache */
-var CORE = 'souvenir-core-v1';
+var CORE = 'souvenir-core-v2';
 var TILES = 'souvenir-tiles-v1';
 var CORE_URLS = [
   './',
@@ -64,7 +64,25 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  // App shell + CDN: cache-first
+  // The page itself: network-first so deployed updates always reach users; cache is the offline fallback
+  if (e.request.mode === 'navigate' || e.request.destination === 'document') {
+    e.respondWith(
+      fetch(e.request).then(function (resp) {
+        if (resp && resp.ok) {
+          var clone = resp.clone();
+          caches.open(CORE).then(function (c) { c.put(e.request, clone); });
+        }
+        return resp;
+      }).catch(function () {
+        return caches.match(e.request).then(function (hit) {
+          return hit || caches.match('./index.html');
+        });
+      })
+    );
+    return;
+  }
+
+  // Static assets + CDN: cache-first (immutable enough; version bump busts them)
   if (url.origin === location.origin || url.hostname === 'unpkg.com') {
     e.respondWith(
       caches.match(e.request).then(function (hit) {

@@ -2002,14 +2002,40 @@
   }
 
   // ---------- Export / import ----------
+  function buildExport() {
+    var ids = [];
+    places.forEach(function (p) { (p.photos || []).forEach(function (id) { ids.push(id); }); });
+    return Promise.all(ids.map(function (id) {
+      return getPhoto(id).then(function (blob) {
+        if (!blob) return null;
+        return new Promise(function (res) {
+          var fr = new FileReader();
+          fr.onload = function () { res([id, fr.result]); };
+          fr.onerror = function () { res(null); };
+          fr.readAsDataURL(blob);
+        });
+      }).catch(function () { return null; });
+    })).then(function (pairs) {
+      var photos = {};
+      pairs.filter(Boolean).forEach(function (pr) { photos[pr[0]] = pr[1]; });
+      return { version: 3, exported: today(), places: places, trips: trips, photos: photos };
+    });
+  }
+  // debug/automation hook — also used by tests
+  window.souvenirBackup = buildExport;
+
   document.getElementById('exportBtn').addEventListener('click', function () {
-    var data = { version: 2, exported: today(), places: places, trips: trips };
-    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'souvenir-export.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    toast('Packing your backup…');
+    buildExport().then(function (data) {
+      var n = Object.keys(data.photos).length;
+      var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'souvenir-backup.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast('Backup saved — everything included' + (n ? ' (' + n + ' photo' + (n === 1 ? '' : 's') + ')' : ''));
+    });
   });
   document.getElementById('importBtn').addEventListener('click', function () {
     document.getElementById('importFile').click();
@@ -2034,9 +2060,19 @@
             places.push(p); added++;
           }
         });
+        var photoMap = (!Array.isArray(data) && data.photos) ? data.photos : {};
+        var photoIds = Object.keys(photoMap);
+        var restorePhotos = Promise.all(photoIds.map(function (id) {
+          return fetch(photoMap[id]).then(function (r) { return r.blob(); })
+            .then(function (blob) { return putPhoto(id, blob); })
+            .catch(function () { /* skip a bad photo, keep the rest */ });
+        }));
         savePlaces(); saveTrips();
-        refreshMarkers(); render(); updateStats();
-        toast('Imported ' + added + ' place' + (added === 1 ? '' : 's'));
+        restorePhotos.then(function () {
+          refreshMarkers(); render(); updateStats();
+          toast('Imported ' + added + ' place' + (added === 1 ? '' : 's') +
+            (photoIds.length ? ' + ' + photoIds.length + ' photo' + (photoIds.length === 1 ? '' : 's') : ''));
+        });
       } catch (err) {
         toast("Couldn't read that file — expected a Souvenir export (.json)");
       }

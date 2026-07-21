@@ -2858,6 +2858,38 @@
     paint();
   }
 
+  // ---------- Screenshot/demo mode (?demo=1&tab=trips|passport&cal=1) ----------
+  function seedDemo() {
+    var mk = function (name, lat, lng, city, country, cat, rating, memory, tip, tags, tripId, gr, gc) {
+      return { id: uid(), name: name, lat: lat, lng: lng, city: city, country: country,
+        cat: cat, status: 'been', rating: rating, added: today(), tripId: tripId || '',
+        nextTime: tip || '', tags: tags || [], gRating: gr || null, gCount: gc || null, gMapsUri: null,
+        memories: memory ? [{ date: today(), text: memory }] : [] };
+    };
+    var t1 = { id: uid('t'), name: 'Paris, October 2016', start: '2016-10-12', end: '2016-10-18', when: '', companions: 'Me + L', eat: 'Pistachio escargots. Too much wine. No regrets.', bought: 'The teapot I almost didn’t buy.', met: 'The baker who saved us the last two.', notes: 'RER B from CDG — tickets at the machine.' };
+    var t2 = { id: uid('t'), name: 'Tokyo, April 2023', start: '2023-04-05', end: '2023-04-14', when: '', companions: 'Solo', eat: 'Tsukemen worth a 40-minute line.', bought: '', met: '', notes: '' };
+    trips.push(t1, t2);
+    places.push(
+      mk('Du Pain et des Idées', 48.87173, 2.36278, 'Paris', 'France', 'eat', 'loved', 'The pistachio escargot — worth the flight alone.', 'Go before 9am — they sell out.', ['best-of'], t1.id, 4.3, 4330),
+      mk('Musée d’Orsay', 48.85991, 2.32658, 'Paris', 'France', 'see', 'loved', 'An hour alone in the Van Gogh room.', '', [], t1.id, 4.7, 88000),
+      mk('Canal Saint-Martin', 48.8710, 2.3658, 'Paris', 'France', 'out', 'liked', 'Cheap wine, curb seats, watched the locks fill at sunset.', '', ['date-night'], t1.id),
+      mk('Fuunji', 35.6895, 139.6982, 'Tokyo', 'Japan', 'eat', 'loved', 'Tsukemen worth the 40-minute line.', 'Cash only.', ['best-of'], t2.id, 4.4, 5200),
+      mk('Nakano Broadway', 35.7086, 139.6657, 'Tokyo', 'Japan', 'shop', 'liked', 'Four floors of vintage toys. Found the grail.', '', [], t2.id),
+      mk('teamLab Planets', 35.6494, 139.7898, 'Tokyo', 'Japan', 'do', 'loved', 'Barefoot in the water room — like walking through a dream.', 'Book 2 weeks ahead.', [], t2.id, 4.5, 31000),
+      mk('Katz’s Delicatessen', 40.7223, -73.9874, 'New York', 'United States', 'eat', 'liked', 'Pastrami on rye, ticket in hand, exactly like the movies.', '', []),
+      mk('Roscioli', 41.8935, 12.4746, 'Rome', 'Italy', 'eat', 'loved', 'The carbonara that ruined all other carbonara.', 'Reserve the wine cellar table.', ['best-of'], '', 4.3, 6354)
+    );
+    savePlaces(); saveTrips();
+  }
+
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('demo') === '1') {
+    localStorage.setItem(TOUR_KEY, '1');
+    if (!places.length) seedDemo();
+    if (qs.get('tab')) view.tab = qs.get('tab');
+    if (qs.get('cal') === '1') view.tripsView = 'cal';
+  }
+
   // ---------- Boot ----------
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     navigator.serviceWorker.register('sw.js').catch(function () { /* offline mode just won't cache */ });

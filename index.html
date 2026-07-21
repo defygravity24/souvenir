@@ -55,7 +55,7 @@
     border-bottom: 1px solid var(--line);
     z-index: 1200;
   }
-  .logo { font-weight: 600; font-size: 1.05rem; letter-spacing: -0.01em; white-space: nowrap; }
+  .logo { font-weight: 600; font-size: 1.05rem; letter-spacing: -0.01em; white-space: nowrap; color: var(--accent); }
   .searchbox { position: relative; flex: 1; max-width: 480px; }
   .searchbox input {
     width: 100%;
@@ -486,6 +486,21 @@
   .lb-bar .btn-quiet { background: var(--card); }
   .lb-bar .btn-danger { color: #E8A79D; }
 
+  .faq-item {
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 0; margin-bottom: 8px; background: var(--bg);
+  }
+  .faq-item summary {
+    cursor: pointer; padding: 11px 14px;
+    font-size: 0.9rem; font-weight: 600; color: var(--ink);
+    list-style-position: inside;
+  }
+  .faq-item summary::marker { color: var(--accent); }
+  .faq-item p {
+    margin: 0; padding: 0 14px 12px;
+    font-size: 0.88rem; color: var(--muted); line-height: 1.55;
+  }
+
   .settings-note { font-size: 0.85rem; color: var(--muted); line-height: 1.55; }
   .settings-note a { color: var(--accent); }
   .status-pill {
@@ -542,12 +557,13 @@
 <body>
 
 <div class="topbar">
-  <span class="logo">🧭 Souvenir</span>
+  <span class="logo">Souvenir</span>
   <div class="searchbox">
     <input id="search" type="text" placeholder="Search a city, restaurant, shop, museum, anywhere…" autocomplete="off">
     <div class="search-results" id="results"></div>
   </div>
   <span class="stats" id="stats"></span>
+  <button class="gear-btn" id="faqBtn" title="Help &amp; FAQ">?</button>
   <button class="gear-btn" id="gearBtn" title="Settings">⚙︎</button>
 </div>
 
@@ -557,7 +573,8 @@
     <div class="map-fabs">
       <div class="fab-menu" id="fabMenu" hidden>
         <button id="fabSearch">🔍 Search a place</button>
-        <button id="fabPinCenter">📍 Pin the center of the map</button>
+        <button id="fabPinMe">📍 Pin where I am right now</button>
+        <button id="fabPinCenter">🎯 Pin the center of the map</button>
       </div>
       <button class="fab secondary" id="fabExplore" title="What’s here? Show places around this spot">✨</button>
       <button class="fab" id="fabAdd" title="Add a place" aria-label="Add a place">＋</button>
@@ -789,7 +806,8 @@
   function pinFor(place) {
     var color = place.status === 'want' ? '#8A968F' : (CAT[place.cat] ? CAT[place.cat].color : '#1E6E52');
     return L.circleMarker([place.lat, place.lng], {
-      radius: 8, color: '#FFFFFF', weight: 2, fillColor: color, fillOpacity: 1
+      radius: 8, color: '#FFFFFF', weight: 2, fillColor: color, fillOpacity: 1,
+      bubblingMouseEvents: false
     });
   }
 
@@ -811,8 +829,19 @@
     if (draftMarker) { map.removeLayer(draftMarker); draftMarker = null; }
   }
 
+  // "You are here" blue dot
+  var selfMarkers = [];
+  function showSelfDot(lat, lng) {
+    selfMarkers.forEach(function (m) { map.removeLayer(m); });
+    selfMarkers = [
+      L.circleMarker([lat, lng], { radius: 14, color: 'transparent', fillColor: '#2A6FDB', fillOpacity: 0.18, interactive: false }).addTo(map),
+      L.circleMarker([lat, lng], { radius: 7, color: '#FFFFFF', weight: 2.5, fillColor: '#2A6FDB', fillOpacity: 1, interactive: false }).addTo(map)
+    ];
+  }
+
   map.on('click', function (e) {
-    if (view.mode === 'add') return;
+    // Tapping the map while the add card is open = cancel (the "unclick")
+    if (view.mode === 'add') { cancelDraft(); return; }
     // Zoomed out = navigation, not pinning: fly toward the click instead of opening the add card
     if (map.getZoom() < 10) {
       map.flyTo(e.latlng, Math.min(map.getZoom() + 3, 12), { duration: 0.7 });
@@ -1041,6 +1070,7 @@
     places.push(place);
     savePlaces();
     clearDraftMarker();
+    if (typeof clearExplore === 'function') clearExplore();
     view.mode = 'detail'; view.placeId = place.id; view.draft = null;
     refreshMarkers(); render(); updateStats();
     toast('Pinned ' + place.name);
@@ -1149,6 +1179,10 @@
     view.mode = (view.mode === 'settings') ? 'list' : 'settings';
     render();
   });
+  document.getElementById('faqBtn').addEventListener('click', function () {
+    view.mode = (view.mode === 'faq') ? 'list' : 'faq';
+    render();
+  });
 
   function render() {
     tabsEl.querySelectorAll('.tab').forEach(function (t) {
@@ -1159,6 +1193,7 @@
       refreshMarkers();
     }
     if (view.mode === 'settings') renderSettings();
+    else if (view.mode === 'faq') renderFaq();
     else if (view.mode === 'add') renderAdd();
     else if (view.mode === 'detail') renderDetail();
     else if (view.tab === 'trips') {
@@ -1323,6 +1358,7 @@
     navigator.geolocation.getCurrentPosition(function (pos) {
       view.nearMode = true;
       view.nearPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      showSelfDot(view.nearPos.lat, view.nearPos.lng);
       map.flyTo([view.nearPos.lat, view.nearPos.lng], 12, { duration: 0.8 });
       render();
     }, function () {
@@ -1825,6 +1861,55 @@
     toast('Guide saved — text it to a friend');
   }
 
+  // ----- Help & FAQ -----
+  function renderFaq() {
+    var html = '<div class="card-pane">' +
+      '<div class="card-top"><button class="back-btn" id="backBtn">← Back</button></div>' +
+      '<h2>What is Souvenir?</h2>' +
+      '<p class="settings-note" style="font-size:0.95rem;">Your personal map of everywhere you’ve ever been. Every restaurant you loved, every little shop, every museum and beach — pinned where it happened, with the memory attached. When you land in a city you haven’t seen in ten years, everything you loved is already waiting: what you ate, what you saw, what it felt like. Not strangers’ reviews — <em>your</em> places, with <em>your</em> notes.</p>' +
+
+      '<div><span class="field-label">What it can do</span><div class="settings-note">' +
+      '• Pin any place on Earth — search it, tap the map, tap ＋, or let ✨ show you what’s nearby<br>' +
+      '• Real businesses come with their Google star ratings<br>' +
+      '• Attach memories, up to 5 photos, your own review, and a tip for next time<br>' +
+      '• Group places into Trips — who came, what you ate &amp; drank, what you bought, who you met<br>' +
+      '• Tag anything (#honeymoon, #best-coffee) and filter by Eat / Shop / See / Stay / Outdoors<br>' +
+      '• 📍 Near me sorts your places by distance when you’re out<br>' +
+      '• Passport: your countries, stamps, and travel stats<br>' +
+      '• Download a city Guide to send a friend<br>' +
+      '• Works offline once loaded — pins and memories load without signal' +
+      '</div></div>' +
+
+      '<div><span class="field-label">Questions</span>' +
+      faqItem('Do I need an account?', 'No. Your phone is your account — nothing to sign up for, no password to lose. Everything stays on your device; nothing is uploaded anywhere.') +
+      faqItem('How do I add where I am right now?', 'Tap the ＋ button on the map, then “Pin where I am right now.” A blue dot shows your location and the place card opens, ready for a memory.') +
+      faqItem('How do I pin a beach or a spot with no name?', 'Tap ＋ → “Pin the center of the map,” or just tap the map when you’re zoomed in. Name it whatever you like — “that perfect beach.”') +
+      faqItem('What’s the ✨ button?', 'Zoom into a neighborhood and tap ✨ — restaurants, shops and hotels around you appear as gold dots with ratings. Tap a dot to add it. Tap ✨ again to clear them.') +
+      faqItem('Is my data safe? What if I get a new phone?', 'Tap Export (bottom of the list) — it saves one file with everything: places, memories, trips, and photos. Import it on any device and it all comes back. Export once in a while as a backup.') +
+      faqItem('What do the colors mean?', 'Red = Eat · Gold = Shop · Blue = See · Purple = Stay · Green = Outdoors. Gray pins are places on your “Want to go” list.') +
+      '</div>' +
+
+      '<div><span class="field-label">Show me again</span><div class="btn-row">' +
+      '<button class="btn-quiet" id="faqTourBtn">The intro tour</button>' +
+      '<button class="btn-quiet" id="faqCoachBtn">Point out the buttons</button>' +
+      '</div></div>' +
+      '</div>';
+    body.innerHTML = html;
+    document.getElementById('backBtn').addEventListener('click', function () {
+      view.mode = 'list'; render();
+    });
+    document.getElementById('faqTourBtn').addEventListener('click', function () {
+      view.mode = 'list'; render(); showTour();
+    });
+    document.getElementById('faqCoachBtn').addEventListener('click', function () {
+      showCoach();
+    });
+  }
+
+  function faqItem(q, a) {
+    return '<details class="faq-item"><summary>' + esc(q) + '</summary><p>' + esc(a) + '</p></details>';
+  }
+
   // ----- Settings -----
   function renderSettings() {
     var active = !!gkey();
@@ -2135,6 +2220,20 @@
     startDraft({ name: '', lat: c.lat, lng: c.lng, city: '', country: '', custom: true });
     reverseGeocode(c.lat, c.lng);
   });
+  document.getElementById('fabPinMe').addEventListener('click', function () {
+    fabMenu.hidden = true;
+    if (!navigator.geolocation) { toast('Location not available in this browser'); return; }
+    toast('Finding you…');
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var lat = pos.coords.latitude, lng = pos.coords.longitude;
+      showSelfDot(lat, lng);
+      map.flyTo([lat, lng], Math.max(map.getZoom(), 16), { duration: 0.8 });
+      startDraft({ name: '', lat: lat, lng: lng, city: '', country: '', custom: true });
+      reverseGeocode(lat, lng);
+    }, function () {
+      toast("Couldn't get your location — check location permissions");
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.map-fabs')) fabMenu.hidden = true;
   });
@@ -2172,13 +2271,16 @@
       if (!got.length) { toast('Nothing found right here — pan a little and try again'); return; }
       got.forEach(function (p) {
         var m = L.circleMarker([p.location.latitude, p.location.longitude], {
-          radius: 6, color: '#FFFFFF', weight: 2, fillColor: '#C08A1E', fillOpacity: 0.95
+          radius: 7, color: '#FFFFFF', weight: 2, fillColor: '#C08A1E', fillOpacity: 0.95,
+          bubblingMouseEvents: false
         }).addTo(map);
         var label = (p.displayName ? p.displayName.text : 'Place') +
           (p.rating ? ' ★' + p.rating.toFixed(1) : '');
         m.bindTooltip(label, { direction: 'top', offset: [0, -6], className: 'pin-label' });
         m.on('click', function () {
-          clearExplore();
+          // Keep the other dots visible; just highlight the one being added
+          exploreMarkers.forEach(function (x) { x.setStyle({ fillColor: '#C08A1E' }); });
+          m.setStyle({ fillColor: '#1E6E52' });
           startDraft({
             name: p.displayName ? p.displayName.text : 'Place',
             lat: p.location.latitude, lng: p.location.longitude,

@@ -470,19 +470,19 @@
 
   /* ---------- Trip calendar ---------- */
   .trips-toggle { display: flex; gap: 6px; padding: 12px 16px 4px; }
-  .cal { padding: 8px 16px 16px; }
-  .cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .cal-head .cal-title { flex: 1; text-align: center; font-weight: 600; font-size: 0.95rem; }
+  .cal { padding: 4px 16px 12px; max-width: 340px; }
+  .cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cal-head .cal-title { flex: 1; text-align: center; font-weight: 600; font-size: 0.9rem; }
   .cal-head button {
     border: 1px solid var(--line); background: var(--card); border-radius: 8px;
-    padding: 4px 12px; font-size: 0.9rem; color: var(--muted);
+    padding: 2px 10px; font-size: 0.85rem; color: var(--muted);
   }
   .cal-head button:hover { border-color: var(--ink); color: var(--ink); }
-  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
-  .cal-dow { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; color: var(--faint); text-align: center; padding: 4px 0; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-dow { font-size: 0.58rem; font-weight: 700; letter-spacing: 0.08em; color: var(--faint); text-align: center; padding: 2px 0; }
   .cal-day {
-    aspect-ratio: 1; border: none; background: none; border-radius: 9px;
-    font-size: 0.8rem; color: var(--ink); font-variant-numeric: tabular-nums;
+    height: 32px; border: none; background: none; border-radius: 7px;
+    font-size: 0.76rem; color: var(--ink); font-variant-numeric: tabular-nums;
     display: flex; align-items: center; justify-content: center;
   }
   .cal-day.blank { visibility: hidden; }
@@ -1235,6 +1235,7 @@
   });
 
   function render() {
+    body.scrollTop = 0;
     tabsEl.querySelectorAll('.tab').forEach(function (t) {
       t.classList.toggle('active', t.getAttribute('data-tab') === view.tab && view.mode !== 'settings');
     });
@@ -1300,10 +1301,19 @@
     html += '</div>';
     var tags = allTags();
     if (tags.length) {
-      html += '<div class="filters" style="padding-top:0;">' + tags.map(function (t) {
-        var on = view.filterTag.toLowerCase() === t.toLowerCase();
-        return '<button class="chip' + (on ? ' active' : '') + '" data-tag="' + esc(t) + '">#' + esc(t) + '</button>';
-      }).join('') + '</div>';
+      // Few tags: show them. Many tags: fold behind a single "# tags" chip so it never gets messy.
+      var tagsExpanded = tags.length < 5 || view.tagsOpen || !!view.filterTag;
+      html += '<div class="filters" style="padding-top:0;">';
+      if (tags.length >= 5) {
+        html += '<button class="chip' + (tagsExpanded ? ' active' : '') + '" data-tagtoggle="1"># tags · ' + tags.length + '</button>';
+      }
+      if (tagsExpanded) {
+        html += tags.map(function (t) {
+          var on = view.filterTag.toLowerCase() === t.toLowerCase();
+          return '<button class="chip' + (on ? ' active' : '') + '" data-tag="' + esc(t) + '">#' + esc(t) + '</button>';
+        }).join('');
+      }
+      html += '</div>';
     }
     html += '<div class="findbox"><input id="findInput" placeholder="Find in your places & memories… (“croissant”, “Tokyo”)" value="' + esc(view.findText) + '"></div>';
 
@@ -1372,6 +1382,10 @@
       el.addEventListener('click', function () {
         if (el.hasAttribute('data-want')) view.filterWant = !view.filterWant;
         else if (el.hasAttribute('data-near')) { toggleNear(); return; }
+        else if (el.hasAttribute('data-tagtoggle')) {
+          view.tagsOpen = !view.tagsOpen;
+          if (!view.tagsOpen) view.filterTag = '';
+        }
         else if (el.hasAttribute('data-tag')) {
           var t = el.getAttribute('data-tag');
           view.filterTag = (view.filterTag.toLowerCase() === t.toLowerCase()) ? '' : t;
@@ -1476,10 +1490,21 @@
     } else if (view.tripsView === 'cal') {
       html += calendarHtml();
     } else {
+      html += '<div class="findbox"><input id="tripFind" placeholder="Search your trips… (“Paris”, “2016”, “Mom”)" value="' + esc(view.tripFind || '') + '"></div>';
+      var q = (view.tripFind || '').trim().toLowerCase();
+      var matchTrip = function (t) {
+        if (!q) return true;
+        return [t.name, tripWhenLabel(t), t.companions, t.eat, t.bought, t.met, t.notes]
+          .filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
+      };
       // Sort by start date (newest first); undated trips keep creation order at the end
       var dated = trips.filter(function (t) { return t.start; })
-        .sort(function (a, b) { return b.start.localeCompare(a.start); });
-      var undated = trips.filter(function (t) { return !t.start; }).slice().reverse();
+        .sort(function (a, b) { return b.start.localeCompare(a.start); })
+        .filter(matchTrip);
+      var undated = trips.filter(function (t) { return !t.start; }).slice().reverse().filter(matchTrip);
+      if (!dated.length && !undated.length) {
+        html += '<div class="empty"><p>No trips match.</p></div>';
+      }
       var lastYear = null;
       dated.forEach(function (t) {
         var y = t.start.slice(0, 4);
@@ -1492,6 +1517,18 @@
       }
     }
     body.innerHTML = html;
+
+    var tripFindEl = document.getElementById('tripFind');
+    if (tripFindEl) {
+      tripFindEl.addEventListener('input', function () {
+        view.tripFind = tripFindEl.value;
+        var s = body.scrollTop;
+        renderTripList();
+        var t2 = document.getElementById('tripFind');
+        t2.focus(); t2.setSelectionRange(t2.value.length, t2.value.length);
+        body.scrollTop = s;
+      });
+    }
 
     document.getElementById('newTripBtn').addEventListener('click', function () {
       var t = { id: uid('t'), name: '', when: '', start: '', end: '', companions: '', notes: '' };

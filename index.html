@@ -26,6 +26,7 @@
     --cat-eat: #C2502E;
     --cat-shop: #C08A1E;
     --cat-see: #3E6FB0;
+    --cat-do: #2E8C86;
     --cat-stay: #7A599E;
     --cat-out: #4E8A46;
     --danger: #B03A2E;
@@ -320,6 +321,7 @@
   .seg button.on.c-eat  { background: var(--cat-eat);  border-color: var(--cat-eat); }
   .seg button.on.c-shop { background: var(--cat-shop); border-color: var(--cat-shop); }
   .seg button.on.c-see  { background: var(--cat-see);  border-color: var(--cat-see); }
+  .seg button.on.c-do   { background: var(--cat-do);   border-color: var(--cat-do); }
   .seg button.on.c-stay { background: var(--cat-stay); border-color: var(--cat-stay); }
   .seg button.on.c-out  { background: var(--cat-out);  border-color: var(--cat-out); }
   .seg button.on.c-neutral { background: var(--ink); border-color: var(--ink); }
@@ -437,15 +439,60 @@
   .pp-bar-row .n { font-size: 0.8rem; color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; }
   .pp-bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
   .pp-bar span { display: block; height: 100%; border-radius: 4px; }
-  .stamp {
-    display: inline-flex; align-items: baseline; gap: 6px;
-    border: 1.5px solid var(--accent); color: var(--accent);
-    border-radius: 8px; padding: 5px 12px; margin: 0 6px 6px 0;
-    font-size: 0.85rem; font-weight: 600;
-    transform: rotate(-1.2deg);
+  .stamp-grid { display: flex; flex-wrap: wrap; gap: 16px 14px; }
+  .stamp-btn {
+    border: none; background: none; padding: 0; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
   }
-  .stamp:nth-child(even) { transform: rotate(1.4deg); border-color: var(--cat-see); color: var(--cat-see); }
-  .stamp .n { font-size: 0.72rem; color: var(--faint); font-weight: 500; }
+  .stamp-box {
+    --ink-c: var(--accent);
+    border: 2px solid var(--ink-c); color: var(--ink-c);
+    border-radius: 10px; padding: 10px 16px 9px;
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    position: relative;
+    transform: rotate(-2.2deg);
+  }
+  .stamp-box::after {
+    content: ''; position: absolute; inset: 3px;
+    border: 1px solid var(--ink-c); border-radius: 6px; opacity: 0.55;
+  }
+  .stamp-btn:nth-child(2n) .stamp-box { transform: rotate(1.8deg); --ink-c: var(--cat-see); }
+  .stamp-btn:nth-child(3n) .stamp-box { --ink-c: var(--cat-eat); transform: rotate(-1.2deg); }
+  .stamp-btn:nth-child(4n) .stamp-box { --ink-c: var(--cat-stay); transform: rotate(2.4deg); }
+  .stamp-air { font-size: 1.05rem; line-height: 1; }
+  .stamp-n {
+    font-size: 0.64rem; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .stamp-country { font-size: 0.82rem; font-weight: 600; color: var(--ink); }
+  .stamp-btn:hover .stamp-box { background: var(--accent-soft); }
+
+  /* ---------- Trip calendar ---------- */
+  .trips-toggle { display: flex; gap: 6px; padding: 12px 16px 4px; }
+  .cal { padding: 8px 16px 16px; }
+  .cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .cal-head .cal-title { flex: 1; text-align: center; font-weight: 600; font-size: 0.95rem; }
+  .cal-head button {
+    border: 1px solid var(--line); background: var(--card); border-radius: 8px;
+    padding: 4px 12px; font-size: 0.9rem; color: var(--muted);
+  }
+  .cal-head button:hover { border-color: var(--ink); color: var(--ink); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .cal-dow { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; color: var(--faint); text-align: center; padding: 4px 0; }
+  .cal-day {
+    aspect-ratio: 1; border: none; background: none; border-radius: 9px;
+    font-size: 0.8rem; color: var(--ink); font-variant-numeric: tabular-nums;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cal-day.blank { visibility: hidden; }
+  .cal-day.trip { background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+  .cal-day.trip:hover { background: #175C44; }
+  .cal-legend { margin-top: 10px; font-size: 0.78rem; color: var(--faint); }
+  .year-head {
+    padding: 12px 16px 0; font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
+  }
 
   .tag-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .tag-chip {
@@ -610,6 +657,7 @@
     eat:  { label: 'Eat',      color: '#C2502E' },
     shop: { label: 'Shop',     color: '#C08A1E' },
     see:  { label: 'See',      color: '#3E6FB0' },
+    do:   { label: 'Do',       color: '#2E8C86' },
     stay: { label: 'Stay',     color: '#7A599E' },
     out:  { label: 'Outdoors', color: '#4E8A46' }
   };
@@ -816,7 +864,9 @@
     markers = {};
     var source = view.tripFocus
       ? places.filter(function (p) { return p.tripId === view.tripFocus; })
-      : visiblePlaces();
+      : (view.countryFocus
+        ? places.filter(function (p) { return p.country === view.countryFocus; })
+        : visiblePlaces());
     source.forEach(function (p) {
       var m = pinFor(p).addTo(map);
       m.bindTooltip(p.name, { direction: 'top', offset: [0, -8], className: 'pin-label' });
@@ -1192,8 +1242,13 @@
       view.tripFocus = null;
       refreshMarkers();
     }
+    if (view.mode !== 'country' && view.countryFocus) {
+      view.countryFocus = null;
+      refreshMarkers();
+    }
     if (view.mode === 'settings') renderSettings();
     else if (view.mode === 'faq') renderFaq();
+    else if (view.mode === 'country') renderCountry();
     else if (view.mode === 'add') renderAdd();
     else if (view.mode === 'detail') renderDetail();
     else if (view.tab === 'trips') {
@@ -1372,31 +1427,147 @@
   }
 
   // ----- Trips -----
+  function tripWhenLabel(t) {
+    if (t.start) {
+      var s = new Date(t.start + 'T12:00:00');
+      var e = t.end ? new Date(t.end + 'T12:00:00') : null;
+      var md = function (d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); };
+      if (!e || t.end === t.start) return md(s) + ', ' + s.getFullYear();
+      if (s.getFullYear() === e.getFullYear()) {
+        if (s.getMonth() === e.getMonth()) {
+          return s.toLocaleDateString('en-US', { month: 'short' }) + ' ' + s.getDate() + '–' + e.getDate() + ', ' + s.getFullYear();
+        }
+        return md(s) + ' – ' + md(e) + ', ' + s.getFullYear();
+      }
+      return md(s) + ', ' + s.getFullYear() + ' – ' + md(e) + ', ' + e.getFullYear();
+    }
+    return t.when || '';
+  }
+
+  function tripStats(t) {
+    var tp = places.filter(function (p) { return p.tripId === t.id; });
+    var mem = 0, ph = 0;
+    tp.forEach(function (p) { mem += (p.memories || []).length; ph += (p.photos || []).length; });
+    return { places: tp.length, memories: mem, photos: ph, list: tp };
+  }
+
+  function tripCardHtml(t) {
+    var st = tripStats(t);
+    return '<button class="trip-card" data-trip="' + t.id + '">' +
+      '<span class="t-name">' + esc(t.name) + '</span>' +
+      '<div class="t-meta">' + esc([tripWhenLabel(t), t.companions ? 'with ' + t.companions : ''].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="t-count">' + st.places + (st.places === 1 ? ' place' : ' places') +
+      (st.memories ? ' · ' + st.memories + (st.memories === 1 ? ' memory' : ' memories') : '') +
+      (st.photos ? ' · ' + st.photos + (st.photos === 1 ? ' photo' : ' photos') : '') +
+      '</div></button>';
+  }
+
   function renderTripList() {
-    var html = '<div class="new-trip-wrap"><button class="btn-quiet" id="newTripBtn">+ New trip</button></div>';
+    var html = '<div class="trips-toggle">' +
+      '<button class="chip' + (view.tripsView !== 'cal' ? ' active' : '') + '" data-tv="list">List</button>' +
+      '<button class="chip' + (view.tripsView === 'cal' ? ' active' : '') + '" data-tv="cal">📅 Calendar</button>' +
+      '<span style="flex:1"></span>' +
+      '<button class="btn-quiet" id="newTripBtn" style="padding:5px 12px;font-size:0.8rem;">+ New trip</button>' +
+      '</div>';
+
     if (!trips.length) {
       html += '<div class="empty"><h3>No trips yet</h3>' +
         '<p>A trip is a chapter: “Paris, October 2016.” It remembers when you went and who came along, and collects every place from those days.</p></div>';
+    } else if (view.tripsView === 'cal') {
+      html += calendarHtml();
     } else {
-      trips.slice().reverse().forEach(function (t) {
-        var count = places.filter(function (p) { return p.tripId === t.id; }).length;
-        html += '<button class="trip-card" data-trip="' + t.id + '">' +
-          '<span class="t-name">' + esc(t.name) + '</span>' +
-          '<div class="t-meta">' + esc([t.when, t.companions ? 'with ' + t.companions : ''].filter(Boolean).join(' · ')) + '</div>' +
-          '<div class="t-count">' + count + (count === 1 ? ' place' : ' places') + '</div>' +
-          '</button>';
+      // Sort by start date (newest first); undated trips keep creation order at the end
+      var dated = trips.filter(function (t) { return t.start; })
+        .sort(function (a, b) { return b.start.localeCompare(a.start); });
+      var undated = trips.filter(function (t) { return !t.start; }).slice().reverse();
+      var lastYear = null;
+      dated.forEach(function (t) {
+        var y = t.start.slice(0, 4);
+        if (y !== lastYear) { html += '<div class="year-head">' + y + '</div>'; lastYear = y; }
+        html += tripCardHtml(t);
       });
+      if (undated.length) {
+        if (dated.length) html += '<div class="year-head">No dates yet</div>';
+        undated.forEach(function (t) { html += tripCardHtml(t); });
+      }
     }
     body.innerHTML = html;
+
     document.getElementById('newTripBtn').addEventListener('click', function () {
-      var t = { id: uid('t'), name: '', when: '', companions: '', notes: '' };
+      var t = { id: uid('t'), name: '', when: '', start: '', end: '', companions: '', notes: '' };
       trips.push(t); saveTrips();
       view.mode = 'trip'; view.tripId = t.id;
       render();
     });
+    body.querySelectorAll('.trips-toggle .chip').forEach(function (el) {
+      el.addEventListener('click', function () {
+        view.tripsView = el.getAttribute('data-tv');
+        renderTripList();
+      });
+    });
     body.querySelectorAll('[data-trip]').forEach(function (el) {
       el.addEventListener('click', function () {
         view.mode = 'trip'; view.tripId = el.getAttribute('data-trip');
+        render();
+      });
+    });
+    wireCalendar();
+  }
+
+  // ----- Trip calendar -----
+  function defaultCalMonth() {
+    var dated = trips.filter(function (t) { return t.start; })
+      .sort(function (a, b) { return b.start.localeCompare(a.start); });
+    var base = dated.length ? new Date(dated[0].start + 'T12:00:00') : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  }
+
+  function tripOnDay(iso) {
+    return trips.find(function (t) {
+      return t.start && iso >= t.start && iso <= (t.end || t.start);
+    });
+  }
+
+  function calendarHtml() {
+    if (!view.calMonth) view.calMonth = defaultCalMonth();
+    var m = view.calMonth;
+    var title = m.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    var html = '<div class="cal"><div class="cal-head">' +
+      '<button id="calPrev" aria-label="Previous month">‹</button>' +
+      '<span class="cal-title">' + esc(title) + '</span>' +
+      '<button id="calNext" aria-label="Next month">›</button></div>' +
+      '<div class="cal-grid">';
+    ['S', 'M', 'T', 'W', 'T', 'F', 'S'].forEach(function (d) { html += '<span class="cal-dow">' + d + '</span>'; });
+    var firstDow = new Date(m.getFullYear(), m.getMonth(), 1).getDay();
+    var days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+    for (var b = 0; b < firstDow; b++) html += '<span class="cal-day blank"></span>';
+    for (var d = 1; d <= days; d++) {
+      var iso = m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      var t = tripOnDay(iso);
+      if (t) {
+        html += '<button class="cal-day trip" data-caltrip="' + t.id + '" title="' + esc(t.name) + '">' + d + '</button>';
+      } else {
+        html += '<span class="cal-day">' + d + '</span>';
+      }
+    }
+    html += '</div><div class="cal-legend">Green days are trip days — tap one to open the trip. Add dates to a trip and it appears here.</div></div>';
+    return html;
+  }
+
+  function wireCalendar() {
+    var prev = document.getElementById('calPrev'), next = document.getElementById('calNext');
+    if (!prev) return;
+    prev.addEventListener('click', function () {
+      view.calMonth = new Date(view.calMonth.getFullYear(), view.calMonth.getMonth() - 1, 1);
+      renderTripList();
+    });
+    next.addEventListener('click', function () {
+      view.calMonth = new Date(view.calMonth.getFullYear(), view.calMonth.getMonth() + 1, 1);
+      renderTripList();
+    });
+    body.querySelectorAll('[data-caltrip]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        view.mode = 'trip'; view.tripId = el.getAttribute('data-caltrip');
         render();
       });
     });
@@ -1414,14 +1585,27 @@
       }
     }
 
+    var st = tripStats(t);
     var html = '<div class="card-pane">' +
-      '<div class="card-top"><button class="back-btn" id="backBtn">← All trips</button></div>' +
+      '<div class="card-top"><button class="back-btn" id="backBtn">← All trips</button>' +
+      '<span class="spacer" style="flex:1"></span>' +
+      (st.places ? '<button class="btn-quiet" id="wrapBtn" style="padding:5px 12px;font-size:0.8rem;">Trip wrap ↓</button>' : '') +
+      '</div>' +
 
       '<div><label class="field-label" for="tripName">Trip</label>' +
-      '<input class="name-input" id="tripName" value="' + esc(t.name) + '" placeholder="Paris, October 2016"></div>' +
+      '<input class="name-input" id="tripName" value="' + esc(t.name) + '" placeholder="Paris, October 2016">' +
+      (st.places ? '<div class="card-sub" style="margin-top:6px;">' + st.places + (st.places === 1 ? ' place' : ' places') +
+        ' · ' + st.memories + (st.memories === 1 ? ' memory' : ' memories') +
+        ' · ' + st.photos + (st.photos === 1 ? ' photo' : ' photos') + '</div>' : '') +
+      '</div>' +
 
-      '<div><label class="field-label" for="tripWhen">When</label>' +
-      '<input class="text-input" id="tripWhen" value="' + esc(t.when) + '" placeholder="Oct 12–18, 2016"></div>' +
+      '<div><span class="field-label">Dates</span>' +
+      '<div style="display:flex;gap:8px;">' +
+      '<input class="text-input" type="date" id="tripStart" value="' + esc(t.start || '') + '">' +
+      '<input class="text-input" type="date" id="tripEnd" value="' + esc(t.end || '') + '">' +
+      '</div>' +
+      (t.when && !t.start ? '<div class="card-sub" style="margin-top:5px;">Was: “' + esc(t.when) + '” — pick real dates to see it on the calendar</div>' : '') +
+      '</div>' +
 
       '<div><label class="field-label" for="tripWho">Who came along</label>' +
       '<input class="text-input" id="tripWho" value="' + esc(t.companions) + '" placeholder="Names, so future-you remembers"></div>' +
@@ -1461,6 +1645,11 @@
       toast('Trip saved');
       render();
     });
+    var wrapBtn = document.getElementById('wrapBtn');
+    if (wrapBtn) wrapBtn.addEventListener('click', function () {
+      autoSaveTrip(t);
+      downloadTripWrap(t);
+    });
     document.getElementById('deleteTrip').addEventListener('click', function () {
       if (!confirm('Delete this trip? Its places stay on the map — they just lose the trip tag.')) return;
       places.forEach(function (p) { if (p.tripId === t.id) p.tripId = ''; });
@@ -1480,7 +1669,9 @@
   function autoSaveTrip(t) {
     var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
     t.name = val('tripName') || t.name || 'Untitled trip';
-    t.when = val('tripWhen');
+    t.start = val('tripStart');
+    t.end = val('tripEnd');
+    if (t.start && t.end && t.end < t.start) { var sw = t.start; t.start = t.end; t.end = sw; }
     t.companions = val('tripWho');
     t.eat = val('tripEat');
     t.bought = val('tripBought');
@@ -1493,8 +1684,9 @@
   function tripOptionsHtml(selectedId, includeNew) {
     var html = '<option value="">No trip</option>';
     trips.slice().reverse().forEach(function (t) {
+      var lbl = tripWhenLabel(t);
       html += '<option value="' + t.id + '"' + (t.id === selectedId ? ' selected' : '') + '>' +
-        esc(t.name + (t.when ? ' — ' + t.when : '')) + '</option>';
+        esc(t.name + (lbl ? ' — ' + lbl : '')) + '</option>';
     });
     if (includeNew) html += '<option value="__new">+ New trip…</option>';
     return html;
@@ -1766,11 +1958,17 @@
       '<div class="pp-cell"><div class="pp-num">' + trips.length + '</div><div class="pp-lbl">Trips</div></div>' +
       '</div>';
 
-    html += '<div class="pp-section"><span class="field-label">Stamps</span>';
+    html += '<div class="pp-section"><span class="field-label">Stamps <span class="soft">(tap one)</span></span>';
     if (countryList.length) {
+      html += '<div class="stamp-grid">';
       countryList.forEach(function (c) {
-        html += '<span class="stamp">' + esc(c) + ' <span class="n">' + countries[c] + '</span></span>';
+        html += '<button class="stamp-btn" data-country="' + esc(c) + '">' +
+          '<span class="stamp-box"><span class="stamp-air">✈</span>' +
+          '<span class="stamp-n">' + countries[c] + (countries[c] === 1 ? ' place' : ' places') + '</span></span>' +
+          '<span class="stamp-country">' + esc(c) + '</span>' +
+          '</button>';
       });
+      html += '</div>';
     } else {
       html += '<div class="card-sub">No stamps yet — pin somewhere you’ve been.</div>';
     }
@@ -1799,6 +1997,137 @@
         '</div></div>';
     }
     body.innerHTML = html;
+
+    body.querySelectorAll('.stamp-btn[data-country]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        view.mode = 'country';
+        view.countryName = el.getAttribute('data-country');
+        render();
+      });
+    });
+  }
+
+  // ----- Country drill-down (from a passport stamp) -----
+  function renderCountry() {
+    var name = view.countryName;
+    var cPlaces = places.filter(function (p) { return p.country === name; });
+    if (!cPlaces.length) { view.mode = 'list'; render(); return; }
+    if (view.countryFocus !== name) {
+      view.countryFocus = name;
+      refreshMarkers();
+      map.fitBounds(L.latLngBounds(cPlaces.map(function (p) { return [p.lat, p.lng]; })).pad(0.3), { maxZoom: 10 });
+    }
+    var cities = {};
+    cPlaces.forEach(function (p) { if (p.city) cities[p.city] = 1; });
+    var cTrips = trips.filter(function (t) {
+      return cPlaces.some(function (p) { return p.tripId === t.id; });
+    });
+
+    var html = '<div class="card-pane" style="padding-bottom:8px;">' +
+      '<div class="card-top"><button class="back-btn" id="backBtn">← Passport</button></div>' +
+      '<div><h2>' + esc(name) + '</h2>' +
+      '<div class="card-sub" style="margin-top:4px;">' + cPlaces.length + (cPlaces.length === 1 ? ' place' : ' places') +
+      ' · ' + Object.keys(cities).length + (Object.keys(cities).length === 1 ? ' city' : ' cities') + '</div></div></div>';
+
+    if (cTrips.length) {
+      html += '<div class="card-pane" style="padding-top:0;padding-bottom:0;"><span class="field-label">Trips here</span></div>';
+      cTrips.forEach(function (t) { html += tripCardHtml(t); });
+    }
+
+    html += '<div class="card-pane" style="padding-top:10px;padding-bottom:0;"><span class="field-label">Places</span></div>';
+    var groups = {};
+    cPlaces.forEach(function (p) { (groups[p.city || 'Elsewhere'] = groups[p.city || 'Elsewhere'] || []).push(p); });
+    Object.keys(groups).sort(function (a, b) { return groups[b].length - groups[a].length; }).forEach(function (city) {
+      html += '<div class="city-group"><div class="city-title" style="cursor:default;">' + esc(city) +
+        ' <span class="n">' + groups[city].length + '</span></div>';
+      groups[city].forEach(function (p) { html += placeRowHtml(p); });
+      html += '</div>';
+    });
+    body.innerHTML = html;
+
+    document.getElementById('backBtn').addEventListener('click', function () {
+      view.mode = 'list'; view.tab = 'passport'; render();
+    });
+    body.querySelectorAll('[data-trip]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        view.mode = 'trip'; view.tab = 'trips'; view.tripId = el.getAttribute('data-trip');
+        render();
+      });
+    });
+    body.querySelectorAll('[data-open]').forEach(function (el) {
+      el.addEventListener('click', function () { openPlace(el.getAttribute('data-open')); });
+    });
+  }
+
+  // ----- Trip wrap (shareable recap) -----
+  function downloadTripWrap(t) {
+    var st = tripStats(t);
+    var byCat = {};
+    st.list.forEach(function (p) { (byCat[p.cat] = byCat[p.cat] || []).push(p); });
+    var order = Object.keys(CAT).filter(function (k) { return byCat[k]; });
+    var qa = [
+      ['What we ate & drank', t.eat], ['What we bought', t.bought],
+      ['People we met', t.met], ['Notes', t.notes]
+    ].filter(function (x) { return x[1]; });
+
+    var doc = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>' + esc(t.name) + ' — Trip Wrap</title><style>' +
+      'body{margin:0;background:#FBFBF9;color:#16211C;font-family:"Avenir Next",Avenir,"Helvetica Neue",sans-serif;line-height:1.55;}' +
+      '.wrap{max-width:640px;margin:0 auto;padding:48px 24px 64px;}' +
+      '.eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#1E6E52;}' +
+      'h1{font-size:2.1rem;font-weight:600;letter-spacing:-.02em;margin:6px 0 4px;}' +
+      '.sub{color:#5C6B63;margin:0 0 8px;}' +
+      '.stats{display:flex;gap:10px;margin:18px 0 26px;flex-wrap:wrap;}' +
+      '.stat{background:#fff;border:1px solid #E4E7E2;border-radius:10px;padding:10px 18px;text-align:center;}' +
+      '.stat b{display:block;font-size:1.4rem;}' +
+      '.stat span{font-size:.68rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8A968F;}' +
+      'h2{font-size:.78rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;margin:26px 0 6px;color:#1E6E52;display:flex;align-items:center;gap:8px;}' +
+      'h2 i{width:9px;height:9px;border-radius:50%;display:inline-block;}' +
+      '.qa{background:#fff;border:1px solid #E4E7E2;border-radius:10px;padding:12px 16px;margin-bottom:10px;}' +
+      '.qa b{display:block;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:#8A968F;margin-bottom:3px;}' +
+      '.place{border-bottom:1px solid #E4E7E2;padding:12px 0;}' +
+      '.pname{font-weight:600;}' +
+      '.rating{font-size:.78rem;color:#1E6E52;font-weight:600;margin-left:8px;}' +
+      '.quote{font-style:italic;color:#5C6B63;font-size:.92rem;margin:3px 0 0;}' +
+      '.foot{margin-top:40px;color:#8A968F;font-size:.8rem;}' +
+      '@media print{.place{break-inside:avoid;}}' +
+      '</style></head><body><div class="wrap">' +
+      '<span class="eyebrow">Trip wrap</span>' +
+      '<h1>' + esc(t.name) + '</h1>' +
+      '<p class="sub">' + esc([tripWhenLabel(t), t.companions ? 'with ' + t.companions : ''].filter(Boolean).join(' · ')) + '</p>' +
+      '<div class="stats">' +
+      '<div class="stat"><b>' + st.places + '</b><span>Places</span></div>' +
+      '<div class="stat"><b>' + st.memories + '</b><span>Memories</span></div>' +
+      '<div class="stat"><b>' + st.photos + '</b><span>Photos</span></div>' +
+      '</div>';
+
+    qa.forEach(function (x) {
+      doc += '<div class="qa"><b>' + esc(x[0]) + '</b>' + esc(x[1]) + '</div>';
+    });
+
+    order.forEach(function (k) {
+      doc += '<h2><i style="background:' + CAT[k].color + '"></i>' + esc(CAT[k].label) + '</h2>';
+      byCat[k].forEach(function (p) {
+        doc += '<div class="place"><span class="pname">' + esc(p.name) + '</span>' +
+          (p.rating ? '<span class="rating">' + esc(RATINGS[p.rating]) + '</span>' : '');
+        if (p.memories && p.memories.length) {
+          doc += '<p class="quote">“' + esc(p.memories[0].text) + '”</p>';
+        }
+        doc += '</div>';
+      });
+    });
+
+    doc += '<p class="foot">Made with Souvenir — a personal map of everywhere I’ve been.</p></div></body></html>';
+
+    var slug = (t.name || 'trip').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    var blob = new Blob([doc], { type: 'text/html' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'wrap-' + (slug || 'trip') + '.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('Trip wrap saved — send it to everyone who was there');
   }
 
   // ----- Shareable city guide -----
@@ -1886,7 +2215,7 @@
       faqItem('How do I pin a beach or a spot with no name?', 'Tap ＋ → “Pin the center of the map,” or just tap the map when you’re zoomed in. Name it whatever you like — “that perfect beach.”') +
       faqItem('What’s the ✨ button?', 'Zoom into a neighborhood and tap ✨ — restaurants, shops and hotels around you appear as gold dots with ratings. Tap a dot to add it. Tap ✨ again to clear them.') +
       faqItem('Is my data safe? What if I get a new phone?', 'Tap Export (bottom of the list) — it saves one file with everything: places, memories, trips, and photos. Import it on any device and it all comes back. Export once in a while as a backup.') +
-      faqItem('What do the colors mean?', 'Red = Eat · Gold = Shop · Blue = See · Purple = Stay · Green = Outdoors. Gray pins are places on your “Want to go” list.') +
+      faqItem('What do the colors mean?', 'Red = Eat · Gold = Shop · Blue = See · Teal = Do (tours, shows, experiences) · Purple = Stay · Green = Outdoors. Gray pins are places on your “Want to go” list.') +
       '</div>' +
 
       '<div><span class="field-label">Show me again</span><div class="btn-row">' +

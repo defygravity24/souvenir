@@ -1,5 +1,5 @@
 /* Souvenir service worker — app shell offline + opportunistic map-tile cache */
-var CORE = 'souvenir-core-v2';
+var CORE = 'souvenir-core-v3';
 var TILES = 'souvenir-tiles-v1';
 var CORE_URLS = [
   './',
@@ -49,7 +49,7 @@ self.addEventListener('fetch', function (e) {
   if (url.hostname.indexOf('nominatim') !== -1 || url.hostname.indexOf('googleapis') !== -1) return;
 
   // Map tiles: stale-while-revalidate
-  if (url.hostname.indexOf('basemaps.cartocdn.com') !== -1) {
+  if (url.hostname.indexOf('basemaps.cartocdn.com') !== -1 || url.hostname.indexOf('arcgisonline.com') !== -1) {
     e.respondWith(
       caches.open(TILES).then(function (c) {
         return c.match(e.request).then(function (hit) {

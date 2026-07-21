@@ -102,7 +102,64 @@
 
   /* ---------- Layout ---------- */
   .main { flex: 1; display: flex; min-height: 0; }
+  .map-wrap { flex: 1; min-width: 0; position: relative; display: flex; }
   #map { flex: 1; min-width: 0; background: #E9EDEA; }
+
+  /* ---------- Map action buttons ---------- */
+  .map-fabs {
+    position: absolute; right: 14px; bottom: 28px; z-index: 1050;
+    display: flex; flex-direction: column; gap: 10px; align-items: flex-end;
+  }
+  .fab {
+    width: 54px; height: 54px; border-radius: 50%;
+    border: none; background: var(--accent); color: #fff;
+    font-size: 1.8rem; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(22,33,28,0.28);
+  }
+  .fab:hover { background: #175C44; }
+  .fab.secondary {
+    width: 46px; height: 46px;
+    background: var(--card); color: var(--accent);
+    border: 1px solid var(--line); font-size: 1.1rem;
+  }
+  .fab.secondary:hover { border-color: var(--accent); }
+  .fab-menu {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 8px 24px rgba(22,33,28,0.16);
+  }
+  .fab-menu button {
+    display: flex; gap: 8px; align-items: center;
+    width: 100%; border: none; background: none;
+    padding: 12px 16px; font-size: 0.9rem; font-weight: 600; color: var(--ink);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .fab-menu button:last-child { border-bottom: none; }
+  .fab-menu button:hover { background: var(--accent-soft); }
+
+  /* ---------- First-run tour ---------- */
+  .tour {
+    position: fixed; inset: 0; z-index: 4000;
+    background: rgba(22,33,28,0.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 22px;
+  }
+  .tour-card {
+    background: var(--card); border-radius: 14px;
+    max-width: 400px; width: 100%;
+    padding: 26px 24px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+    box-shadow: 0 20px 60px rgba(22,33,28,0.35);
+  }
+  .tour-card h3 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+  .tour-card p { margin: 0; color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
+  .tour-dots { display: flex; gap: 6px; justify-content: center; margin-top: 2px; }
+  .tour-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+  .tour-dots span.on { background: var(--accent); }
+  .tour-nav { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+  .tour-nav .spacer { flex: 1; }
   .leaflet-container { font-family: inherit; }
 
   .sidebar {
@@ -463,7 +520,17 @@
 </div>
 
 <div class="main">
-  <div id="map"></div>
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-fabs">
+      <div class="fab-menu" id="fabMenu" hidden>
+        <button id="fabSearch">🔍 Search a place</button>
+        <button id="fabPinCenter">📍 Pin the center of the map</button>
+      </div>
+      <button class="fab secondary" id="fabExplore" title="What’s here? Show places around this spot">✨</button>
+      <button class="fab" id="fabAdd" title="Add a place" aria-label="Add a place">＋</button>
+    </div>
+  </div>
   <aside class="sidebar">
     <div class="tabs" id="tabs">
       <button class="tab" data-tab="places">Places</button>
@@ -680,9 +747,10 @@
 
   // ---------- Map ----------
   var map = L.map('map', { zoomControl: true, worldCopyJump: true }).setView([30, 10], 2);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains: 'abcd', maxZoom: 20
+  // Esri World Street Map: English-first labels worldwide (CARTO/OSM show local scripts)
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    maxZoom: 19
   }).addTo(map);
 
   function pinFor(place) {
@@ -713,8 +781,8 @@
   map.on('click', function (e) {
     if (view.mode === 'add') return;
     // Zoomed out = navigation, not pinning: fly toward the click instead of opening the add card
-    if (map.getZoom() < 12) {
-      map.flyTo(e.latlng, Math.min(map.getZoom() + 3, 13), { duration: 0.7 });
+    if (map.getZoom() < 10) {
+      map.flyTo(e.latlng, Math.min(map.getZoom() + 3, 12), { duration: 0.7 });
       return;
     }
     startDraft({ name: '', lat: e.latlng.lat, lng: e.latlng.lng, city: '', country: '', custom: true });
@@ -1289,6 +1357,15 @@
       '<div><label class="field-label" for="tripWho">Who came along</label>' +
       '<input class="text-input" id="tripWho" value="' + esc(t.companions) + '" placeholder="Names, so future-you remembers"></div>' +
 
+      '<div><label class="field-label" for="tripEat">What did you eat &amp; drink?</label>' +
+      '<textarea class="memo" id="tripEat" placeholder="The goat brochettes. The banana beer. That one perfect coffee.">' + esc(t.eat || '') + '</textarea></div>' +
+
+      '<div><label class="field-label" for="tripBought">What did you buy?</label>' +
+      '<textarea class="memo" id="tripBought" placeholder="The woven basket from the market. Gifts. The thing you almost didn’t buy.">' + esc(t.bought || '') + '</textarea></div>' +
+
+      '<div><label class="field-label" for="tripMet">People you met</label>' +
+      '<textarea class="memo" id="tripMet" placeholder="Locals, guides, the couple from dinner — names, before you forget them.">' + esc(t.met || '') + '</textarea></div>' +
+
       '<div><label class="field-label" for="tripNotes">Trip notes <span class="soft">(trains, flights, weather, the stuff you’ll forget)</span></label>' +
       '<textarea class="memo" id="tripNotes" placeholder="Took the RER B in from the airport. Rained all week — nobody cared.">' + esc(t.notes) + '</textarea></div>' +
 
@@ -1336,6 +1413,9 @@
     t.name = val('tripName') || t.name || 'Untitled trip';
     t.when = val('tripWhen');
     t.companions = val('tripWho');
+    t.eat = val('tripEat');
+    t.bought = val('tripBought');
+    t.met = val('tripMet');
     t.notes = val('tripNotes');
     saveTrips();
   }
@@ -1740,8 +1820,16 @@
       '<div class="settings-note" style="margin-bottom:10px;">Backfill years of saved places in one shot. Go to <a href="https://takeout.google.com" target="_blank" rel="noopener">takeout.google.com</a>, export only <strong>Maps (your places)</strong> and <strong>Saved</strong>, unzip, then drop the files here (<em>Saved Places.json</em> and/or the CSV lists). Imports land as “Want to go” with a <strong>#google-import</strong> tag so you can review them.</div>' +
       '<button class="btn-quiet" id="takeoutBtn">Choose Takeout file…</button>' +
       '<input type="file" id="takeoutFile" accept=".json,.csv" multiple hidden></div>' +
+
+      '<div><span class="field-label">Help</span>' +
+      '<button class="btn-quiet" id="tourAgainBtn">Show the intro tour again</button></div>' +
       '</div>';
     body.innerHTML = html;
+
+    document.getElementById('tourAgainBtn').addEventListener('click', function () {
+      view.mode = 'list'; render();
+      showTour();
+    });
 
     document.getElementById('takeoutBtn').addEventListener('click', function () {
       document.getElementById('takeoutFile').click();
@@ -1956,6 +2044,148 @@
     e.target.value = '';
   });
 
+  // ---------- Map action buttons ----------
+  var fabMenu = document.getElementById('fabMenu');
+  document.getElementById('fabAdd').addEventListener('click', function () {
+    fabMenu.hidden = !fabMenu.hidden;
+  });
+  document.getElementById('fabSearch').addEventListener('click', function () {
+    fabMenu.hidden = true;
+    searchInput.focus();
+    toast('Type anything — a beach, a bar, a whole city');
+  });
+  document.getElementById('fabPinCenter').addEventListener('click', function () {
+    fabMenu.hidden = true;
+    var c = map.getCenter();
+    startDraft({ name: '', lat: c.lat, lng: c.lng, city: '', country: '', custom: true });
+    reverseGeocode(c.lat, c.lng);
+  });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.map-fabs')) fabMenu.hidden = true;
+  });
+
+  // ---------- Explore nearby (Google-Maps-style tappable POIs, on demand) ----------
+  var exploreMarkers = [];
+  function clearExplore() {
+    exploreMarkers.forEach(function (m) { map.removeLayer(m); });
+    exploreMarkers = [];
+  }
+  document.getElementById('fabExplore').addEventListener('click', function () {
+    if (exploreMarkers.length) { clearExplore(); toast('Explore cleared'); return; }
+    if (!gkey()) { toast('Explore needs Google search — check ⚙︎ settings'); return; }
+    if (map.getZoom() < 13) { toast('Zoom in closer, then tap ✨ to see what’s around'); return; }
+    var c = map.getCenter();
+    var ne = map.getBounds().getNorthEast();
+    var radius = Math.min(2000, Math.max(120, map.distance(c, ne) * 0.6));
+    toast('Looking around…');
+    fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': gkey(),
+        'X-Goog-FieldMask': 'places.displayName,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryTypeDisplayName'
+      },
+      body: JSON.stringify({
+        maxResultCount: 20,
+        locationRestriction: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: radius } }
+      })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('nearby ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var got = d.places || [];
+      if (!got.length) { toast('Nothing found right here — pan a little and try again'); return; }
+      got.forEach(function (p) {
+        var m = L.circleMarker([p.location.latitude, p.location.longitude], {
+          radius: 6, color: '#FFFFFF', weight: 2, fillColor: '#C08A1E', fillOpacity: 0.95
+        }).addTo(map);
+        var label = (p.displayName ? p.displayName.text : 'Place') +
+          (p.rating ? ' ★' + p.rating.toFixed(1) : '');
+        m.bindTooltip(label, { direction: 'top', offset: [0, -6], className: 'pin-label' });
+        m.on('click', function () {
+          clearExplore();
+          startDraft({
+            name: p.displayName ? p.displayName.text : 'Place',
+            lat: p.location.latitude, lng: p.location.longitude,
+            city: '', country: '', custom: false,
+            gRating: p.rating || null, gCount: p.userRatingCount || null, gMapsUri: p.googleMapsUri || null
+          });
+          reverseGeocode(p.location.latitude, p.location.longitude);
+        });
+        exploreMarkers.push(m);
+      });
+      toast(got.length + ' places around you — tap a gold dot to add it, ✨ to clear');
+    }).catch(function () {
+      toast('Explore didn’t load — try again in a moment');
+    });
+  });
+
+  // ---------- First-run tour + sample places ----------
+  var TOUR_KEY = 'souvenir.tour.v1';
+  var TOUR = [
+    { t: 'Welcome to Souvenir 🧭', p: 'Your private map of everywhere you’ve ever been — every restaurant, beach, museum and little shop, with your memories attached. Nothing is shared. It all lives on your device.' },
+    { t: 'Search anything', p: 'Type a city to travel there (“St Andrews”), or a place to pin it (“Du Pain et des Idées Paris”). Real businesses show their Google star ratings.' },
+    { t: 'Pin it with a memory', p: 'Pick a category — Eat, Shop, See, Stay, Outdoors — write one sentence about what happened, and leave a tip for next time. Ten seconds. The ＋ button pins anywhere, even a nameless beach. The ✨ button shows what’s around you.' },
+    { t: 'Trips & your Passport', p: 'Group places into trips: who came along, what you ate and drank, what you bought, who you met. The Passport tab collects your whole travel life — countries, stamps, stats.' },
+    { t: 'Two examples are on your map', p: 'We’ve pinned two example places (tagged #example) so you can tap around and see how a memory looks. Open one, then remove them whenever you like. Bon voyage!' }
+  ];
+
+  function seedSamples() {
+    if (places.length) return;
+    places.push({
+      id: uid(), name: 'Du Pain et des Idées', lat: 48.87173, lng: 2.36278,
+      city: 'Paris', country: 'France', cat: 'eat', status: 'been', rating: 'loved',
+      added: today(), tripId: '', nextTime: 'Go before 9am — the pistachio escargots sell out.',
+      tags: ['example'], gRating: 4.3, gCount: 4330, gMapsUri: null,
+      memories: [{ date: today(), text: 'The pistachio escargot — worth the flight alone.' }]
+    });
+    places.push({
+      id: uid(), name: 'The Metropolitan Museum of Art', lat: 40.77944, lng: -73.96324,
+      city: 'New York', country: 'United States', cat: 'see', status: 'been', rating: 'liked',
+      added: today(), tripId: '', nextTime: 'Pay-what-you-wish if you’re a NY resident. Rooftop opens in summer.',
+      tags: ['example'], gRating: null, gCount: null, gMapsUri: null,
+      memories: [{ date: today(), text: 'Got lost in arms & armor for two hours, zero regrets.' }]
+    });
+    savePlaces();
+    refreshMarkers(); render(); updateStats();
+  }
+
+  function showTour() {
+    var idx = 0;
+    var ov = document.createElement('div');
+    ov.className = 'tour';
+    document.body.appendChild(ov);
+    function paint() {
+      var s = TOUR[idx];
+      var last = idx === TOUR.length - 1;
+      ov.innerHTML = '<div class="tour-card">' +
+        '<h3>' + esc(s.t) + '</h3><p>' + esc(s.p) + '</p>' +
+        '<div class="tour-dots">' + TOUR.map(function (_, i) {
+          return '<span class="' + (i === idx ? 'on' : '') + '"></span>';
+        }).join('') + '</div>' +
+        '<div class="tour-nav">' +
+        (idx > 0 ? '<button class="btn-quiet" id="tourBack">Back</button>' : '') +
+        '<span class="spacer"></span>' +
+        (!last ? '<button class="btn-quiet" id="tourSkip">Skip</button>' : '') +
+        '<button class="btn-primary" id="tourNext">' + (last ? 'Start exploring' : 'Next') + '</button>' +
+        '</div></div>';
+      var back = document.getElementById('tourBack');
+      if (back) back.addEventListener('click', function () { idx--; paint(); });
+      var skip = document.getElementById('tourSkip');
+      if (skip) skip.addEventListener('click', finish);
+      document.getElementById('tourNext').addEventListener('click', function () {
+        if (idx === TOUR.length - 1) finish();
+        else { idx++; paint(); }
+      });
+    }
+    function finish() {
+      localStorage.setItem(TOUR_KEY, '1');
+      ov.remove();
+      seedSamples();
+    }
+    paint();
+  }
+
   // ---------- Boot ----------
   if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
     navigator.serviceWorker.register('sw.js').catch(function () { /* offline mode just won't cache */ });
@@ -1967,6 +2197,7 @@
     var group = L.featureGroup(Object.keys(markers).map(function (k) { return markers[k]; }));
     map.fitBounds(group.getBounds().pad(0.3), { maxZoom: 6 });
   }
+  if (!localStorage.getItem(TOUR_KEY)) showTour();
 })();
 </script>
 </body>

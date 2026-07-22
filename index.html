@@ -2970,7 +2970,9 @@
     if (!up && dy > 25) {
       setSheet(true);
       sheetY = t.clientY;
-    } else if (up && dy < -25 && body.scrollTop <= 0 && sheetStartScroll <= 0) {
+    } else if (up && dy < -90 && body.scrollTop <= 0 && sheetStartScroll <= 0) {
+      // Lowering takes a long, deliberate pull from the very top — casual
+      // drift while scrolling near the chips must never collapse the sheet
       setSheet(false);
       sheetY = t.clientY;
     }

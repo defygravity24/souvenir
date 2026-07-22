@@ -864,6 +864,7 @@
 
   // ---------- Map ----------
   var map = L.map('map', { zoomControl: true, worldCopyJump: true }).setView([30, 10], 2);
+  window.__map = map; // debug/testing hook
   // Esri World Street Map: English-first labels worldwide (CARTO/OSM show local scripts)
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
@@ -878,6 +879,8 @@
     });
   }
 
+  function labelsOn() { return map.getZoom() >= 13; }
+
   function refreshMarkers() {
     Object.keys(markers).forEach(function (id) { map.removeLayer(markers[id]); });
     markers = {};
@@ -888,11 +891,22 @@
         : visiblePlaces());
     source.forEach(function (p) {
       var m = pinFor(p).addTo(map);
-      m.bindTooltip(p.name, { direction: 'top', offset: [0, -8], className: 'pin-label' });
+      m.bindTooltip(p.name, { permanent: labelsOn(), direction: 'top', offset: [0, -8], className: 'pin-label' });
       m.on('click', function () { openPlace(p.id); });
       markers[p.id] = m;
     });
   }
+
+  // Names appear on your pins as you zoom in close
+  map.on('zoomend', function () {
+    var on = labelsOn();
+    Object.keys(markers).forEach(function (id) {
+      var p = byId(id);
+      if (!p) return;
+      markers[id].unbindTooltip();
+      markers[id].bindTooltip(p.name, { permanent: on, direction: 'top', offset: [0, -8], className: 'pin-label' });
+    });
+  });
 
   function clearDraftMarker() {
     if (draftMarker) { map.removeLayer(draftMarker); draftMarker = null; }
@@ -1084,7 +1098,7 @@
     view.draft = {
       name: base.name, lat: base.lat, lng: base.lng,
       city: base.city, country: base.country, custom: base.custom,
-      cat: 'eat', status: 'been', note: '', nextTime: '', tags: '',
+      cat: base.cat || 'eat', status: 'been', note: '', nextTime: '', tags: '',
       tripId: lastTripId(), newTrip: false,
       gRating: base.gRating || null, gCount: base.gCount || null, gMapsUri: base.gMapsUri || null
     };
@@ -2725,6 +2739,44 @@
     exploreMarkers.forEach(function (m) { map.removeLayer(m); });
     exploreMarkers = [];
   }
+  var EXPLORE_GROUPS = [
+    { types: ['restaurant', 'cafe', 'bar', 'bakery'], cat: 'eat' },
+    { types: ['store', 'shopping_mall', 'clothing_store', 'book_store'], cat: 'shop' },
+    { types: ['tourist_attraction', 'museum', 'art_gallery', 'park'], cat: 'see' },
+    { types: ['lodging', 'spa', 'amusement_park', 'zoo'], cat: 'stay' }
+  ];
+
+  function catFromTypes(types, fallback) {
+    var t = types || [];
+    var has = function (x) { return t.indexOf(x) !== -1; };
+    if (has('restaurant') || has('cafe') || has('bar') || has('bakery') || has('food')) return 'eat';
+    if (has('lodging')) return 'stay';
+    if (has('park') || has('beach') || has('campground')) return 'out';
+    if (has('spa') || has('amusement_park') || has('zoo') || has('aquarium') || has('movie_theater')) return 'do';
+    if (has('museum') || has('art_gallery') || has('tourist_attraction') || has('church') || has('place_of_worship')) return 'see';
+    if (has('store') || has('shopping_mall') || has('clothing_store') || has('book_store')) return 'shop';
+    return fallback || 'see';
+  }
+
+  function nearbyFetch(c, radius, types) {
+    return fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': gkey(),
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.types,places.rating,places.userRatingCount,places.googleMapsUri'
+      },
+      body: JSON.stringify({
+        maxResultCount: 20,
+        includedTypes: types,
+        locationRestriction: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: radius } }
+      })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('nearby ' + r.status);
+      return r.json();
+    }).then(function (d) { return d.places || []; });
+  }
+
   document.getElementById('fabExplore').addEventListener('click', function () {
     if (exploreMarkers.length) { clearExplore(); toast('Explore cleared'); return; }
     if (!gkey()) { toast('Explore needs Google search — check ⚙︎ settings'); return; }
@@ -2733,46 +2785,43 @@
     var ne = map.getBounds().getNorthEast();
     var radius = Math.min(2000, Math.max(120, map.distance(c, ne) * 0.6));
     toast('Looking around…');
-    fetch('https://places.googleapis.com/v1/places:searchNearby', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': gkey(),
-        'X-Goog-FieldMask': 'places.displayName,places.location,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryTypeDisplayName'
-      },
-      body: JSON.stringify({
-        maxResultCount: 20,
-        locationRestriction: { circle: { center: { latitude: c.lat, longitude: c.lng }, radius: radius } }
-      })
-    }).then(function (r) {
-      if (!r.ok) throw new Error('nearby ' + r.status);
-      return r.json();
-    }).then(function (d) {
-      var got = d.places || [];
+    Promise.all(EXPLORE_GROUPS.map(function (g) {
+      return nearbyFetch(c, radius, g.types).then(function (list) {
+        list.forEach(function (p) { p._cat = catFromTypes(p.types, g.cat); });
+        return list;
+      }).catch(function () { return []; });
+    })).then(function (results) {
+      var seen = {}, got = [];
+      results.forEach(function (list) {
+        list.forEach(function (p) {
+          var key = p.id || ((p.displayName ? p.displayName.text : '') + p.location.latitude);
+          if (!seen[key]) { seen[key] = 1; got.push(p); }
+        });
+      });
       if (!got.length) { toast('Nothing found right here — pan a little and try again'); return; }
       got.forEach(function (p) {
+        var color = CAT[p._cat] ? CAT[p._cat].color : '#C08A1E';
         var m = L.circleMarker([p.location.latitude, p.location.longitude], {
-          radius: 7, color: '#FFFFFF', weight: 2, fillColor: '#C08A1E', fillOpacity: 0.95,
+          radius: 7, color: '#FFFFFF', weight: 2, fillColor: color, fillOpacity: 0.9,
           bubblingMouseEvents: false
         }).addTo(map);
         var label = (p.displayName ? p.displayName.text : 'Place') +
           (p.rating ? ' ★' + p.rating.toFixed(1) : '');
         m.bindTooltip(label, { direction: 'top', offset: [0, -6], className: 'pin-label' });
         m.on('click', function () {
-          // Keep the other dots visible; just highlight the one being added
-          exploreMarkers.forEach(function (x) { x.setStyle({ fillColor: '#C08A1E' }); });
-          m.setStyle({ fillColor: '#1E6E52' });
+          exploreMarkers.forEach(function (x) { x.setStyle({ fillOpacity: 0.45 }); });
+          m.setStyle({ fillOpacity: 1 });
           startDraft({
             name: p.displayName ? p.displayName.text : 'Place',
             lat: p.location.latitude, lng: p.location.longitude,
-            city: '', country: '', custom: false,
+            city: '', country: '', custom: false, cat: p._cat,
             gRating: p.rating || null, gCount: p.userRatingCount || null, gMapsUri: p.googleMapsUri || null
           });
           reverseGeocode(p.location.latitude, p.location.longitude);
         });
         exploreMarkers.push(m);
       });
-      toast(got.length + ' places around you — tap a gold dot to add it, ✨ to clear');
+      toast(got.length + ' places around you, colored by type — tap one to add it, ✨ to clear');
     }).catch(function () {
       toast('Explore didn’t load — try again in a moment');
     });

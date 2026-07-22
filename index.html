@@ -2518,18 +2518,18 @@
       '<div><span class="field-label">Place search</span>' +
       '<div class="settings-note" style="margin-bottom:10px;">' +
       (active
-        ? '<span class="status-pill">Google Places active</span>' + (usingDefault ? ' (built-in key)' : '') +
-          ' — results show Google ratings and exact business locations. Falls back to OpenStreetMap automatically if Google errors.'
-        : '<span class="status-pill">Free OpenStreetMap search</span> — no key in use. Paste a Google Maps API key below (or hit Reset) for exact business matches with star ratings.') +
+        ? '<span class="status-pill">Google search</span> — exact businesses with star ratings. Recommended.'
+        : '<span class="status-pill">Basic search</span> — free OpenStreetMap results, no ratings.') +
       '</div>' +
-      '<input class="text-input" id="gkeyInput" placeholder="Google Maps API key (AIza…)" value="' + esc(gkey()) + '">' +
-      '<div class="btn-row" style="margin-top:8px;">' +
-      '<button class="btn-primary" id="saveKey">Save</button>' +
-      (active ? '<button class="btn-quiet" id="clearKey">Use free search instead</button>' : '') +
-      (usingDefault ? '' : '<button class="btn-quiet" id="resetKey">Reset to built-in key</button>') +
-      '</div></div>' +
-
-      '<div class="settings-note">The built-in key belongs to the <em>Souvenir</em> Google Cloud project. If search stops working, check that <strong>Places API (New)</strong> is enabled and billing is active on that project. Personal usage stays inside the free monthly allowance.</div>' +
+      '<div class="seg">' +
+      '<button id="srchGoogle" class="c-accent' + (active ? ' on' : '') + '">Google (recommended)</button>' +
+      '<button id="srchBasic" class="c-neutral' + (!active ? ' on' : '') + '">Basic</button>' +
+      '</div>' +
+      '<details style="margin-top:12px;"><summary class="settings-note" style="cursor:pointer;">Advanced</summary>' +
+      '<div style="margin-top:8px;"><input class="text-input" id="gkeyInput" placeholder="Custom Google Maps API key (optional)" value="' + esc(usingDefault ? '' : (settings.gkey || '')) + '">' +
+      '<div class="btn-row" style="margin-top:8px;"><button class="btn-quiet" id="saveKey">Save key</button>' +
+      (usingDefault ? '' : '<button class="btn-quiet" id="resetKey">Use built-in</button>') +
+      '</div></div></details></div>' +
 
       '<div><span class="field-label">Import from Google Maps</span>' +
       '<div class="settings-note" style="margin-bottom:10px;">Backfill years of saved places in one shot. Go to <a href="https://takeout.google.com" target="_blank" rel="noopener">takeout.google.com</a>, export only <strong>Maps (your places)</strong> and <strong>Saved</strong>, unzip, then drop the files here (<em>Saved Places.json</em> and/or the CSV lists). Imports land as “Want to go” with a <strong>#google-import</strong> tag so you can review them.</div>' +
@@ -2575,26 +2575,31 @@
     document.getElementById('backBtn').addEventListener('click', function () {
       view.mode = 'list'; render();
     });
-    document.getElementById('saveKey').addEventListener('click', function () {
-      var k = document.getElementById('gkeyInput').value.trim();
-      if (k === DEFAULT_GKEY) delete settings.gkey;
-      else settings.gkey = k;
+    document.getElementById('srchGoogle').addEventListener('click', function () {
+      delete settings.gkey;
       saveSettings();
-      toast(k ? 'Google Places search enabled' : 'Using free OpenStreetMap search');
-      view.mode = 'list'; render();
+      toast('Google search on');
+      renderSettings();
     });
-    var clearBtn = document.getElementById('clearKey');
-    if (clearBtn) clearBtn.addEventListener('click', function () {
+    document.getElementById('srchBasic').addEventListener('click', function () {
       settings.gkey = '';
       saveSettings();
-      toast('Using free OpenStreetMap search');
+      toast('Basic search on');
+      renderSettings();
+    });
+    document.getElementById('saveKey').addEventListener('click', function () {
+      var k = document.getElementById('gkeyInput').value.trim();
+      if (!k || k === DEFAULT_GKEY) delete settings.gkey;
+      else settings.gkey = k;
+      saveSettings();
+      toast(k ? 'Custom key saved' : 'Using built-in key');
       renderSettings();
     });
     var resetBtn = document.getElementById('resetKey');
     if (resetBtn) resetBtn.addEventListener('click', function () {
       delete settings.gkey;
       saveSettings();
-      toast('Back on the built-in Google key');
+      toast('Using built-in key');
       renderSettings();
     });
   }

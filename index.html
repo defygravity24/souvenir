@@ -2882,6 +2882,31 @@
     e.target.value = '';
   });
 
+  // ---------- Keyboard handling: pin the app to the visible area so iOS doesn't
+  // pan the whole page under the status bar when an input focuses ----------
+  if (window.visualViewport) {
+    var vv = window.visualViewport;
+    var vvBase = vv.height;
+    var vvTimer = null;
+    var vvFix = function () {
+      if (vv.height > vvBase) vvBase = vv.height; // orientation/viewport growth resets baseline
+      var keyboardUp = vv.height < vvBase - 100;
+      document.documentElement.style.height = keyboardUp ? vv.height + 'px' : '';
+      document.body.style.height = keyboardUp ? vv.height + 'px' : '';
+      window.scrollTo(0, 0);
+      clearTimeout(vvTimer);
+      vvTimer = setTimeout(function () {
+        map.invalidateSize();
+        var ae = document.activeElement;
+        if (keyboardUp && ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) {
+          ae.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      }, 90);
+    };
+    vv.addEventListener('resize', vvFix);
+    vv.addEventListener('scroll', function () { window.scrollTo(0, 0); });
+  }
+
   // ---------- Bottom-sheet: scrolling the list shrinks the map, top expands it ----------
   var sheetTimer = null;
   body.addEventListener('scroll', function () {

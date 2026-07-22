@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Souvenir</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
 <link rel="manifest" href="manifest.webmanifest">
@@ -33,9 +33,12 @@
     --gold: #C08A1E;
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; }
+  html, body { height: 100%; overscroll-behavior: none; }
+  html { position: fixed; inset: 0; width: 100%; overflow: hidden; }
   body {
     margin: 0;
+    width: 100%;
+    touch-action: pan-x pan-y;
     background: var(--bg);
     color: var(--ink);
     font-family: "Avenir Next", Avenir, "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -354,7 +357,7 @@
   select.trip-select:focus { border-color: var(--accent); background: #fff; }
 
   textarea.memo {
-    width: 100%; min-height: 66px; resize: vertical;
+    width: 100%; min-height: 104px; resize: vertical;
     border: 1px solid var(--line); border-radius: 8px;
     padding: 10px 12px; font-size: 0.92rem; line-height: 1.5;
     color: var(--ink); background: var(--bg); outline: none;
@@ -611,6 +614,9 @@
   @media (max-width: 760px) {
     .main { flex-direction: column; }
     #map { min-height: 42vh; }
+    /* When a card is open for typing, give the card the screen and shrink the map */
+    body.compact-map .map-wrap { flex: 0 0 auto; }
+    body.compact-map #map { min-height: 21vh; height: 21vh; }
     .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--line); flex: 1; }
     .searchbox { max-width: none; }
     .stats { display: none; }
@@ -806,7 +812,9 @@
       b.setAttribute('aria-label', 'View photo');
       row.appendChild(b);
       photoUrl(id).then(function (url) { if (url) b.style.backgroundImage = 'url(' + url + ')'; });
-      b.addEventListener('click', function () { openLightbox(p, id); });
+      b.addEventListener('click', function () {
+        openLightbox(p, id, function () { savePlaces(); renderPhotos(p); });
+      });
     });
     if (p.photos.length < MAX_PHOTOS) {
       var add = document.createElement('label');
@@ -838,10 +846,10 @@
     }
   }
 
-  function openLightbox(p, id) {
+  function openLightbox(owner, id, onDelete) {
     var ov = document.createElement('div');
     ov.className = 'lightbox';
-    ov.innerHTML = '<div class="lb-inner"><img alt="Photo of ' + esc(p.name) + '">' +
+    ov.innerHTML = '<div class="lb-inner"><img alt="Photo of ' + esc(owner.name) + '">' +
       '<div class="lb-bar"><button class="btn-quiet lb-close">Close</button>' +
       '<span style="flex:1"></span><button class="btn-danger lb-del">Delete photo</button></div></div>';
     document.body.appendChild(ov);
@@ -853,13 +861,51 @@
     ov.querySelector('.lb-close').addEventListener('click', close);
     ov.querySelector('.lb-del').addEventListener('click', function () {
       if (!confirm('Delete this photo?')) return;
-      p.photos = p.photos.filter(function (x) { return x !== id; });
-      savePlaces();
+      owner.photos = owner.photos.filter(function (x) { return x !== id; });
       delPhoto(id);
       delete photoUrls[id];
       close();
-      renderPhotos(p);
+      if (onDelete) onDelete();
     });
+  }
+
+  function renderTripPhotos(t) {
+    var row = document.getElementById('tripPhotoRow');
+    if (!row) return;
+    t.photos = t.photos || [];
+    row.innerHTML = '';
+    t.photos.forEach(function (id) {
+      var b = document.createElement('button');
+      b.className = 'photo-thumb';
+      row.appendChild(b);
+      photoUrl(id).then(function (url) { if (url) b.style.backgroundImage = 'url(' + url + ')'; });
+      b.addEventListener('click', function () {
+        openLightbox(t, id, function () { saveTrips(); renderTripPhotos(t); });
+      });
+    });
+    if (t.photos.length < MAX_PHOTOS) {
+      var add = document.createElement('label');
+      add.className = 'photo-add';
+      add.innerHTML = '+<input type="file" accept="image/*" multiple hidden>';
+      var input = add.querySelector('input');
+      input.addEventListener('change', function () {
+        var room = MAX_PHOTOS - t.photos.length;
+        var files = [].slice.call(input.files).slice(0, room);
+        if (!files.length) return;
+        Promise.all(files.map(function (f) {
+          var id = uid('ph');
+          return compressImage(f).then(function (blob) {
+            return putPhoto(id, blob).then(function () { return id; });
+          });
+        })).then(function (ids) {
+          t.photos = t.photos.concat(ids);
+          saveTrips();
+          renderTripPhotos(t);
+          toast(ids.length === 1 ? 'Photo added' : ids.length + ' photos added');
+        }).catch(function () { toast("Couldn't read that image"); });
+      });
+      row.appendChild(add);
+    }
   }
 
   // ---------- Map ----------
@@ -1098,7 +1144,7 @@
     view.draft = {
       name: base.name, lat: base.lat, lng: base.lng,
       city: base.city, country: base.country, custom: base.custom,
-      cat: base.cat || 'eat', status: 'been', note: '', nextTime: '', tags: '',
+      cat: base.cat || 'eat', status: 'been', note: '', nextTime: '', tags: '', photoIds: [],
       tripId: lastTripId(), newTrip: false,
       gRating: base.gRating || null, gCount: base.gCount || null, gMapsUri: base.gMapsUri || null
     };
@@ -1155,7 +1201,7 @@
       cat: d.cat, status: d.status, rating: null,
       added: today(), tripId: tripId || '',
       visited: (chosenTrip && chosenTrip.start) ? chosenTrip.start : '',
-      nextTime: nextTime || '', tags: tags,
+      nextTime: nextTime || '', tags: tags, photos: d.photoIds || [],
       gRating: d.gRating, gCount: d.gCount, gMapsUri: d.gMapsUri,
       memories: note ? [{ date: today(), text: note }] : []
     };
@@ -1169,6 +1215,9 @@
   }
 
   function cancelDraft() {
+    if (view.draft && view.draft.photoIds) {
+      view.draft.photoIds.forEach(function (id) { delPhoto(id); delete photoUrls[id]; });
+    }
     clearDraftMarker();
     view.mode = 'list'; view.draft = null;
     render();
@@ -1291,6 +1340,9 @@
 
   function render() {
     body.scrollTop = 0;
+    document.body.classList.toggle('compact-map',
+      view.mode === 'add' || view.mode === 'detail' || view.mode === 'trip');
+    setTimeout(function () { map.invalidateSize(); }, 60);
     tabsEl.querySelectorAll('.tab').forEach(function (t) {
       t.classList.toggle('active', t.getAttribute('data-tab') === view.tab && view.mode !== 'settings');
     });
@@ -1528,7 +1580,7 @@
   function tripCardHtml(t) {
     var st = tripStats(t);
     var cc = countryColor(tripCountry(t));
-    var thumbId = '';
+    var thumbId = (t.photos && t.photos.length) ? t.photos[0] : '';
     for (var i = 0; i < st.list.length && !thumbId; i++) {
       if (st.list[i].photos && st.list[i].photos.length) thumbId = st.list[i].photos[0];
     }
@@ -1741,6 +1793,9 @@
 
       '<div class="btn-row"><button class="btn-primary" id="saveTrip">Save trip</button></div>';
 
+    html += '<div><span class="field-label">Trip photos <span class="soft">(up to ' + MAX_PHOTOS + ')</span></span>' +
+      '<div class="photo-row" id="tripPhotoRow"></div></div>';
+
     html += '<div><span class="field-label">Places on this trip</span>';
     if (tPlaces.length) {
       tPlaces.forEach(function (p) { html += placeRowHtml(p); });
@@ -1753,6 +1808,7 @@
     html += '</div>';
     body.innerHTML = html;
 
+    renderTripPhotos(t);
     document.getElementById('backBtn').addEventListener('click', function () {
       autoSaveTrip(t);
       view.mode = 'list'; render();
@@ -1769,6 +1825,7 @@
     });
     document.getElementById('deleteTrip').addEventListener('click', function () {
       if (!confirm('Delete this trip? Its places stay on the map — they just lose the trip tag.')) return;
+      (t.photos || []).forEach(function (id) { delPhoto(id); delete photoUrls[id]; });
       places.forEach(function (p) { if (p.tripId === t.id) p.tripId = ''; });
       trips = trips.filter(function (x) { return x.id !== t.id; });
       saveTrips(); savePlaces();
@@ -1841,6 +1898,9 @@
         '</div>' : '') +
       '</div>' +
 
+      '<div><span class="field-label">Photos <span class="soft">(up to ' + MAX_PHOTOS + ')</span></span>' +
+      '<div class="photo-row" id="draftPhotoRow"></div></div>' +
+
       '<div><label class="field-label" for="draftNote">Memory <span class="soft">(optional)</span></label>' +
       '<textarea class="memo" id="draftNote" placeholder="What happened here? One sentence is plenty."></textarea></div>' +
 
@@ -1861,11 +1921,22 @@
 
     document.getElementById('cancelDraft').addEventListener('click', cancelDraft);
     document.getElementById('saveDraft').addEventListener('click', saveDraft);
+    // Toggle chip classes in place — re-rendering the card mid-tap made the view jump
     document.getElementById('draftCat').querySelectorAll('button').forEach(function (b) {
-      b.addEventListener('click', function () { d.cat = b.getAttribute('data-k'); persistAddInputs(); renderAdd(); });
+      b.addEventListener('click', function () {
+        d.cat = b.getAttribute('data-k');
+        document.getElementById('draftCat').querySelectorAll('button').forEach(function (x) {
+          x.classList.toggle('on', x === b);
+        });
+      });
     });
     document.getElementById('draftStatus').querySelectorAll('button').forEach(function (b) {
-      b.addEventListener('click', function () { d.status = b.getAttribute('data-s'); persistAddInputs(); renderAdd(); });
+      b.addEventListener('click', function () {
+        d.status = b.getAttribute('data-s');
+        document.getElementById('draftStatus').querySelectorAll('button').forEach(function (x) {
+          x.classList.toggle('on', x === b);
+        });
+      });
     });
     document.getElementById('draftTrip').addEventListener('change', function (e) {
       persistAddInputs();
@@ -1873,6 +1944,7 @@
       else { d.newTrip = false; d.tripId = e.target.value; }
       renderAdd();
     });
+    renderDraftPhotos(d);
     var noteEl = document.getElementById('draftNote');
     var nextEl = document.getElementById('draftNext');
     if (d.note) noteEl.value = d.note;
@@ -1893,6 +1965,46 @@
     if (window.matchMedia('(min-width: 761px)').matches) {
       if (!d.name) document.getElementById('draftName').focus();
       else noteEl.focus();
+    }
+  }
+
+  function renderDraftPhotos(d) {
+    var row = document.getElementById('draftPhotoRow');
+    if (!row) return;
+    row.innerHTML = '';
+    d.photoIds.forEach(function (id) {
+      var b = document.createElement('button');
+      b.className = 'photo-thumb';
+      b.title = 'Tap to remove';
+      row.appendChild(b);
+      photoUrl(id).then(function (url) { if (url) b.style.backgroundImage = 'url(' + url + ')'; });
+      b.addEventListener('click', function () {
+        if (!confirm('Remove this photo?')) return;
+        d.photoIds = d.photoIds.filter(function (x) { return x !== id; });
+        delPhoto(id); delete photoUrls[id];
+        renderDraftPhotos(d);
+      });
+    });
+    if (d.photoIds.length < MAX_PHOTOS) {
+      var add = document.createElement('label');
+      add.className = 'photo-add';
+      add.innerHTML = '+<input type="file" accept="image/*" multiple hidden>';
+      var input = add.querySelector('input');
+      input.addEventListener('change', function () {
+        var room = MAX_PHOTOS - d.photoIds.length;
+        var files = [].slice.call(input.files).slice(0, room);
+        if (!files.length) return;
+        Promise.all(files.map(function (f) {
+          var id = uid('ph');
+          return compressImage(f).then(function (blob) {
+            return putPhoto(id, blob).then(function () { return id; });
+          });
+        })).then(function (ids) {
+          d.photoIds = d.photoIds.concat(ids);
+          renderDraftPhotos(d);
+        }).catch(function () { toast("Couldn't read that image"); });
+      });
+      row.appendChild(add);
     }
   }
 
@@ -2287,13 +2399,8 @@
     doc += '<p class="foot">Made with Souvenir — a personal map of everywhere I’ve been.</p></div></body></html>';
 
     var slug = (t.name || 'trip').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    var blob = new Blob([doc], { type: 'text/html' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'wrap-' + (slug || 'trip') + '.html';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast('Trip wrap saved — send it to everyone who was there');
+    saveFile('wrap-' + (slug || 'trip') + '.html', new Blob([doc], { type: 'text/html' }),
+      'text/html', 'Trip wrap ready — send it to everyone who was there');
   }
 
   // ----- Shareable city guide -----
@@ -2347,13 +2454,8 @@
       '</div></body></html>';
 
     var slug = cityName.split(',')[0].toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    var blob = new Blob([doc], { type: 'text/html' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'my-' + (slug || 'city') + '.html';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast('Guide saved — text it to a friend');
+    saveFile('my-' + (slug || 'city') + '.html', new Blob([doc], { type: 'text/html' }),
+      'text/html', 'Guide ready — text it to a friend');
   }
 
   // ----- Help & FAQ -----
@@ -2620,10 +2722,29 @@
     toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2200);
   }
 
+  // ---------- File saving (iOS apps have no downloads — use the share sheet) ----------
+  function saveFile(filename, blob, mime, doneMsg) {
+    var file;
+    try { file = new File([blob], filename, { type: mime }); } catch (e) { file = null; }
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file] }).then(function () {
+        if (doneMsg) toast(doneMsg);
+      }).catch(function () { /* user closed the sheet — fine */ });
+      return;
+    }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    if (doneMsg) toast(doneMsg);
+  }
+
   // ---------- Export / import ----------
   function buildExport() {
     var ids = [];
     places.forEach(function (p) { (p.photos || []).forEach(function (id) { ids.push(id); }); });
+    trips.forEach(function (t) { (t.photos || []).forEach(function (id) { ids.push(id); }); });
     return Promise.all(ids.map(function (id) {
       return getPhoto(id).then(function (blob) {
         if (!blob) return null;
@@ -2648,12 +2769,8 @@
     buildExport().then(function (data) {
       var n = Object.keys(data.photos).length;
       var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'souvenir-backup.json';
-      a.click();
-      URL.revokeObjectURL(a.href);
-      toast('Backup saved — everything included' + (n ? ' (' + n + ' photo' + (n === 1 ? '' : 's') + ')' : ''));
+      saveFile('souvenir-backup.json', blob, 'application/json',
+        'Backup ready — everything included' + (n ? ' (' + n + ' photo' + (n === 1 ? '' : 's') + ')' : ''));
     });
   });
   document.getElementById('importBtn').addEventListener('click', function () {
@@ -2712,6 +2829,7 @@
   document.getElementById('fabPinCenter').addEventListener('click', function () {
     fabMenu.hidden = true;
     var c = map.getCenter();
+    if (!isFinite(c.lat) || !isFinite(c.lng)) { toast('Map is still settling — try again'); return; }
     startDraft({ name: '', lat: c.lat, lng: c.lng, city: '', country: '', custom: true });
     reverseGeocode(c.lat, c.lng);
   });
@@ -2811,6 +2929,9 @@
         m.on('click', function () {
           exploreMarkers.forEach(function (x) { x.setStyle({ fillOpacity: 0.45 }); });
           m.setStyle({ fillOpacity: 1 });
+          // Keep the tapped place's name visible on the map
+          m.unbindTooltip();
+          m.bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -6], className: 'pin-label' });
           startDraft({
             name: p.displayName ? p.displayName.text : 'Place',
             lat: p.location.latitude, lng: p.location.longitude,

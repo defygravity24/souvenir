@@ -180,6 +180,11 @@
     display: flex; gap: 4px; align-items: center;
     padding: 10px 16px 0;
     border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  .add-menu {
+    position: absolute; right: 16px; top: 100%;
+    margin-top: 4px; z-index: 1400;
   }
   .add-mem-btn {
     margin-left: auto; margin-bottom: 8px;
@@ -659,6 +664,11 @@
       <button class="tab" data-tab="trips">Trips</button>
       <button class="tab" data-tab="passport">Passport</button>
       <button class="add-mem-btn" id="addMemoryBtn">＋ Add Memory</button>
+      <div class="fab-menu add-menu" id="addMenu" hidden>
+        <button id="amSearch">🔍 Search a place</button>
+        <button id="amPinMe">📍 Pin where I am right now</button>
+        <button id="amPinCenter">🎯 Pin the center of the map</button>
+      </div>
     </div>
     <div id="sidebarBody" class="sidebar-scroll"></div>
     <div class="sidebar-foot">
@@ -2883,20 +2893,25 @@
   document.getElementById('fabAdd').addEventListener('click', function () {
     fabMenu.hidden = !fabMenu.hidden;
   });
-  document.getElementById('fabSearch').addEventListener('click', function () {
-    fabMenu.hidden = true;
+  var addMenu = document.getElementById('addMenu');
+  function hideAddMenus() { fabMenu.hidden = true; addMenu.hidden = true; }
+
+  function actSearchFocus() {
+    hideAddMenus();
+    view.tab = 'places';
+    if (view.mode !== 'list') { view.mode = 'list'; render(); }
     searchInput.focus();
-    toast('Type anything — a beach, a bar, a whole city');
-  });
-  document.getElementById('fabPinCenter').addEventListener('click', function () {
-    fabMenu.hidden = true;
+    toast('Type the place — a restaurant, a beach, a whole city');
+  }
+  function actPinCenter() {
+    hideAddMenus();
     var c = map.getCenter();
     if (!isFinite(c.lat) || !isFinite(c.lng)) { toast('Map is still settling — try again'); return; }
     startDraft({ name: '', lat: c.lat, lng: c.lng, city: '', country: '', custom: true });
     reverseGeocode(c.lat, c.lng);
-  });
-  document.getElementById('fabPinMe').addEventListener('click', function () {
-    fabMenu.hidden = true;
+  }
+  function actPinMe() {
+    hideAddMenus();
     if (!navigator.geolocation) { toast('Location not available in this browser'); return; }
     toast('Finding you…');
     navigator.geolocation.getCurrentPosition(function (pos) {
@@ -2908,9 +2923,17 @@
     }, function () {
       toast("Couldn't get your location — check location permissions");
     }, { enableHighAccuracy: true, timeout: 10000 });
-  });
+  }
+
+  document.getElementById('fabSearch').addEventListener('click', actSearchFocus);
+  document.getElementById('fabPinCenter').addEventListener('click', actPinCenter);
+  document.getElementById('fabPinMe').addEventListener('click', actPinMe);
+  document.getElementById('amSearch').addEventListener('click', actSearchFocus);
+  document.getElementById('amPinCenter').addEventListener('click', actPinCenter);
+  document.getElementById('amPinMe').addEventListener('click', actPinMe);
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.map-fabs')) fabMenu.hidden = true;
+    if (!e.target.closest('.tabs')) addMenu.hidden = true;
   });
 
   // ---------- Explore nearby (Google-Maps-style tappable POIs, on demand) ----------
@@ -3010,13 +3033,10 @@
     });
   });
 
-  // ---------- "Add Memory" button (the obvious one) ----------
+  // ---------- "Add Memory" button: opens a visible chooser ----------
   document.getElementById('addMemoryBtn').addEventListener('click', function () {
-    view.tab = 'places';
-    if (view.mode !== 'list') { view.mode = 'list'; }
-    render();
-    searchInput.focus();
-    toast('Type the place — a restaurant, a beach, a whole city');
+    var m = document.getElementById('addMenu');
+    m.hidden = !m.hidden;
   });
 
   // ---------- Coach marks: arrows pointing at the real buttons ----------

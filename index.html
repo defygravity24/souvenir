@@ -1025,6 +1025,12 @@
   }
 
   map.on('click', function (e) {
+    // Tapping the map sliver while the sheet is up = bring everything back down
+    if (window.innerWidth <= 760 && document.body.classList.contains('sheet-up')) {
+      document.body.classList.remove('sheet-up');
+      setTimeout(function () { map.invalidateSize(); }, 340);
+      return;
+    }
     // Tapping the map while the add card is open = cancel (the "unclick")
     if (view.mode === 'add') { cancelDraft(); return; }
     // Zoomed out = navigation, not pinning: fly toward the click instead of opening the add card
@@ -2911,6 +2917,19 @@
     };
     vv.addEventListener('resize', vvFix);
     vv.addEventListener('scroll', function () { window.scrollTo(0, 0); });
+    // Belt & suspenders: if focus leaves all inputs, never stay stuck in keyboard layout
+    document.addEventListener('focusout', function () {
+      setTimeout(function () {
+        var ae = document.activeElement;
+        var typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT');
+        if (!typing && document.body.classList.contains('kb-open')) {
+          document.body.classList.remove('kb-open');
+          document.documentElement.style.height = '';
+          document.body.style.height = '';
+          map.invalidateSize();
+        }
+      }, 250);
+    });
   }
 
   // ---------- Bottom-sheet: scrolling the list shrinks the map, top expands it ----------
@@ -2924,26 +2943,49 @@
     sheetTimer = setTimeout(function () { map.invalidateSize(); }, 340);
   }
   var sidebarEl = document.querySelector('.sidebar');
-  var sheetY = null, sheetStartScroll = 0;
+  var TAB_ORDER = ['places', 'trips', 'passport'];
+  function switchTab(dir) {
+    var i = TAB_ORDER.indexOf(view.tab) + dir;
+    if (i < 0 || i >= TAB_ORDER.length) return;
+    view.tab = TAB_ORDER[i];
+    view.mode = 'list';
+    if (view.tab === 'trips') view.tripsView = 'list';
+    render(); // sheet state persists — only a pull-down brings it back
+  }
+  var sheetY = null, sheetX0 = null, sheetY0 = null, sheetStartScroll = 0;
   sidebarEl.addEventListener('touchstart', function (e) {
     if (window.innerWidth > 760) return;
-    sheetY = e.touches[0].clientY;
+    sheetY = sheetY0 = e.touches[0].clientY;
+    sheetX0 = e.touches[0].clientX;
     sheetStartScroll = body.scrollTop;
   }, { passive: true });
   sidebarEl.addEventListener('touchmove', function (e) {
     if (sheetY === null || window.innerWidth > 760) return;
     if (document.body.classList.contains('compact-map')) return; // card modes manage the map themselves
-    var dy = sheetY - e.touches[0].clientY; // positive = finger moving up
+    var t = e.touches[0];
+    // Horizontal intent = tab swipe territory; don't move the sheet
+    if (Math.abs(t.clientX - sheetX0) > Math.abs(t.clientY - sheetY0)) return;
+    var dy = sheetY - t.clientY; // positive = finger moving up
     var up = document.body.classList.contains('sheet-up');
     if (!up && dy > 25) {
       setSheet(true);
-      sheetY = e.touches[0].clientY;
+      sheetY = t.clientY;
     } else if (up && dy < -25 && body.scrollTop <= 0 && sheetStartScroll <= 0) {
       setSheet(false);
-      sheetY = e.touches[0].clientY;
+      sheetY = t.clientY;
     }
   }, { passive: true });
-  sidebarEl.addEventListener('touchend', function () { sheetY = null; }, { passive: true });
+  sidebarEl.addEventListener('touchend', function (e) {
+    if (sheetX0 !== null && window.innerWidth <= 760 && view.mode === 'list') {
+      var t = e.changedTouches[0];
+      var dx = t.clientX - sheetX0;
+      var dyTotal = t.clientY - sheetY0;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dyTotal)) {
+        switchTab(dx < 0 ? 1 : -1); // swipe left -> next tab
+      }
+    }
+    sheetY = sheetX0 = sheetY0 = null;
+  }, { passive: true });
 
   // ---------- Map action buttons ----------
   var fabMenu = document.getElementById('fabMenu');

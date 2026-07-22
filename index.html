@@ -613,10 +613,11 @@
 
   @media (max-width: 760px) {
     .main { flex-direction: column; }
-    #map { min-height: 42vh; }
-    /* When a card is open for typing, give the card the screen and shrink the map */
-    body.compact-map .map-wrap { flex: 0 0 auto; }
-    body.compact-map #map { min-height: 21vh; height: 21vh; }
+    .map-wrap { flex: 0 0 auto; }
+    #map { height: 42vh; min-height: 0; transition: height 0.25s ease; }
+    /* Bottom-sheet feel: scrolling the list slides it up over a smaller map;
+       card modes (add/detail/trip) shrink it too */
+    body.compact-map #map, body.sheet-up #map { height: 21vh; }
     .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--line); flex: 1; }
     .searchbox { max-width: none; }
     .stats { display: none; }
@@ -2862,6 +2863,20 @@
     });
     e.target.value = '';
   });
+
+  // ---------- Bottom-sheet: scrolling the list shrinks the map, top expands it ----------
+  var sheetTimer = null;
+  body.addEventListener('scroll', function () {
+    if (window.innerWidth > 760) return;
+    if (document.body.classList.contains('compact-map')) return; // card modes manage the map themselves
+    var cur = document.body.classList.contains('sheet-up');
+    var next = body.scrollTop > 30 ? true : (body.scrollTop <= 2 ? false : cur);
+    if (next !== cur) {
+      document.body.classList.toggle('sheet-up', next);
+      clearTimeout(sheetTimer);
+      sheetTimer = setTimeout(function () { map.invalidateSize(); }, 280);
+    }
+  }, { passive: true });
 
   // ---------- Map action buttons ----------
   var fabMenu = document.getElementById('fabMenu');

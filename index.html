@@ -1882,7 +1882,8 @@
     document.getElementById('saveTrip').addEventListener('click', function () {
       autoSaveTrip(t);
       toast('Trip saved ✓');
-      // no re-render: stay exactly where you are
+      view.mode = 'list';
+      render(); // Save means done — back to the trips list
     });
     var wrapBtn = document.getElementById('wrapBtn');
     if (wrapBtn) wrapBtn.addEventListener('click', function () {

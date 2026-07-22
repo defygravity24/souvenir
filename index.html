@@ -620,9 +620,11 @@
     .main { flex-direction: column; }
     .map-wrap { flex: 0 0 auto; }
     #map { height: 42vh; min-height: 0; transition: height 0.25s ease; }
-    /* Bottom-sheet feel: scrolling the list slides it up over a smaller map;
-       card modes (add/detail/trip) shrink it too */
-    body.compact-map #map, body.sheet-up #map { height: 21vh; }
+    /* Card modes (add/detail/trip): small map so there's room to type */
+    body.compact-map #map { height: 21vh; }
+    /* Scrolling the list: map collapses to a sliver so the list gets the screen */
+    body.sheet-up #map { height: 10vh; }
+    body.sheet-up .map-fabs { display: none; }
     .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--line); flex: 1; }
     .searchbox { max-width: none; }
     .stats { display: none; }

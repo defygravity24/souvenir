@@ -580,15 +580,15 @@
 
   /* ---------- Sidebar footer ---------- */
   .sidebar-foot {
-    display: flex; gap: 10px; align-items: center;
-    padding: 10px 16px;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    display: flex; gap: 14px; align-items: center;
+    padding: 5px 16px;
+    padding-bottom: calc(5px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line);
-    font-size: 0.78rem; color: var(--faint);
+    font-size: 0.7rem; color: var(--faint);
   }
   .sidebar-foot button {
     background: none; border: none; padding: 0;
-    font-size: 0.78rem; color: var(--muted); text-decoration: underline;
+    font-size: 0.7rem; color: var(--faint); text-decoration: underline;
   }
   .sidebar-foot button:hover { color: var(--ink); }
 
@@ -661,7 +661,6 @@
     </div>
     <div id="sidebarBody" class="sidebar-scroll"></div>
     <div class="sidebar-foot">
-      <span>Saved on this device</span>
       <span style="flex:1"></span>
       <button id="exportBtn">Export</button>
       <button id="importBtn">Import</button>
@@ -847,26 +846,66 @@
   }
 
   function openLightbox(owner, id, onDelete) {
+    var idx = Math.max(0, (owner.photos || []).indexOf(id));
     var ov = document.createElement('div');
     ov.className = 'lightbox';
     ov.innerHTML = '<div class="lb-inner"><img alt="Photo of ' + esc(owner.name) + '">' +
-      '<div class="lb-bar"><button class="btn-quiet lb-close">Close</button>' +
-      '<span style="flex:1"></span><button class="btn-danger lb-del">Delete photo</button></div></div>';
+      '<div class="lb-bar">' +
+      '<button class="btn-quiet lb-close">Close</button>' +
+      '<span style="flex:1"></span>' +
+      '<button class="btn-quiet lb-prev" aria-label="Previous photo">‹</button>' +
+      '<span class="lb-count" style="color:#DCE5E0;font-size:0.8rem;font-variant-numeric:tabular-nums;"></span>' +
+      '<button class="btn-quiet lb-next" aria-label="Next photo">›</button>' +
+      '<span style="flex:1"></span>' +
+      '<button class="btn-danger lb-del">Delete</button></div></div>';
     document.body.appendChild(ov);
-    photoUrl(id).then(function (url) { if (url) ov.querySelector('img').src = url; });
+    var img = ov.querySelector('img');
+    var countEl = ov.querySelector('.lb-count');
+    var prevBtn = ov.querySelector('.lb-prev');
+    var nextBtn = ov.querySelector('.lb-next');
+
+    function show(i) {
+      var n = owner.photos.length;
+      if (!n) { close(); return; }
+      idx = ((i % n) + n) % n;
+      photoUrl(owner.photos[idx]).then(function (url) { if (url) img.src = url; });
+      countEl.textContent = (idx + 1) + ' / ' + n;
+      prevBtn.style.visibility = n > 1 ? 'visible' : 'hidden';
+      nextBtn.style.visibility = n > 1 ? 'visible' : 'hidden';
+    }
     function close() { ov.remove(); document.removeEventListener('keydown', onKey); }
-    function onKey(e) { if (e.key === 'Escape') close(); }
+    function onKey(e) {
+      if (e.key === 'Escape') close();
+      if (e.key === 'ArrowLeft') show(idx - 1);
+      if (e.key === 'ArrowRight') show(idx + 1);
+    }
     document.addEventListener('keydown', onKey);
     ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
     ov.querySelector('.lb-close').addEventListener('click', close);
+    prevBtn.addEventListener('click', function () { show(idx - 1); });
+    nextBtn.addEventListener('click', function () { show(idx + 1); });
+
+    // Swipe left/right through the photos
+    var touchX = null;
+    img.addEventListener('touchstart', function (e) { touchX = e.touches[0].clientX; }, { passive: true });
+    img.addEventListener('touchend', function (e) {
+      if (touchX === null) return;
+      var dx = e.changedTouches[0].clientX - touchX;
+      touchX = null;
+      if (Math.abs(dx) > 40) show(dx < 0 ? idx + 1 : idx - 1);
+    }, { passive: true });
+
     ov.querySelector('.lb-del').addEventListener('click', function () {
       if (!confirm('Delete this photo?')) return;
-      owner.photos = owner.photos.filter(function (x) { return x !== id; });
-      delPhoto(id);
-      delete photoUrls[id];
-      close();
+      var delId = owner.photos[idx];
+      owner.photos = owner.photos.filter(function (x) { return x !== delId; });
+      delPhoto(delId);
+      delete photoUrls[delId];
       if (onDelete) onDelete();
+      if (!owner.photos.length) close();
+      else show(idx);
     });
+    show(idx);
   }
 
   function renderTripPhotos(t) {
@@ -1326,6 +1365,7 @@
     t.addEventListener('click', function () {
       view.tab = t.getAttribute('data-tab');
       view.mode = 'list';
+      if (view.tab === 'trips') view.tripsView = 'list'; // Trips always opens on the list
       render();
     });
   });
@@ -1669,7 +1709,9 @@
     });
     body.querySelectorAll('.trips-toggle .chip').forEach(function (el) {
       el.addEventListener('click', function () {
-        view.tripsView = el.getAttribute('data-tv');
+        var tv = el.getAttribute('data-tv');
+        // Tapping Calendar again closes it back to the list
+        view.tripsView = (tv === 'cal' && view.tripsView === 'cal') ? 'list' : tv;
         renderTripList();
       });
     });

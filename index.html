@@ -626,6 +626,9 @@
     /* Scrolling the list: map collapses to a sliver so the list gets the screen */
     body.sheet-up #map { height: 10vh; }
     body.sheet-up .map-fabs { display: none; }
+    /* Keyboard open: map fully out of the way so the fields get the space */
+    body.kb-open #map { height: 0; }
+    body.kb-open .map-fabs { display: none; }
     .sidebar { width: 100%; border-left: none; border-top: 1px solid var(--line); flex: 1; }
     .searchbox { max-width: none; }
     .stats { display: none; }
@@ -2894,13 +2897,15 @@
       var keyboardUp = vv.height < vvBase - 100;
       document.documentElement.style.height = keyboardUp ? vv.height + 'px' : '';
       document.body.style.height = keyboardUp ? vv.height + 'px' : '';
+      // With the keyboard up, the map gets out of the way entirely
+      document.body.classList.toggle('kb-open', keyboardUp);
       window.scrollTo(0, 0);
       clearTimeout(vvTimer);
       vvTimer = setTimeout(function () {
         map.invalidateSize();
         var ae = document.activeElement;
         if (keyboardUp && ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) {
-          ae.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          ae.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
       }, 90);
     };

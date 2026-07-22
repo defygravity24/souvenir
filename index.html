@@ -108,21 +108,21 @@
 
   /* ---------- Map action buttons ---------- */
   .map-fabs {
-    position: absolute; right: 14px; bottom: 28px; z-index: 1050;
-    display: flex; flex-direction: column; gap: 10px; align-items: flex-end;
+    position: absolute; right: 14px; top: 14px; z-index: 1050;
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
   }
   .fab {
-    width: 54px; height: 54px; border-radius: 50%;
+    width: 44px; height: 44px; border-radius: 50%;
     border: none; background: var(--accent); color: #fff;
-    font-size: 1.8rem; line-height: 1;
+    font-size: 1.45rem; line-height: 1;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 14px rgba(22,33,28,0.28);
+    box-shadow: 0 3px 10px rgba(22,33,28,0.25);
   }
   .fab:hover { background: #175C44; }
   .fab.secondary {
-    width: 46px; height: 46px;
+    width: 38px; height: 38px;
     background: var(--card); color: var(--accent);
-    border: 1px solid var(--line); font-size: 1.1rem;
+    border: 1px solid var(--line); font-size: 0.95rem;
   }
   .fab.secondary:hover { border-color: var(--accent); }
   .fab-menu {
@@ -637,13 +637,13 @@
   <div class="map-wrap">
     <div id="map"></div>
     <div class="map-fabs">
+      <button class="fab" id="fabAdd" title="Add a place" aria-label="Add a place">＋</button>
+      <button class="fab secondary" id="fabExplore" title="What’s here? Show places around this spot">✨</button>
       <div class="fab-menu" id="fabMenu" hidden>
         <button id="fabSearch">🔍 Search a place</button>
         <button id="fabPinMe">📍 Pin where I am right now</button>
         <button id="fabPinCenter">🎯 Pin the center of the map</button>
       </div>
-      <button class="fab secondary" id="fabExplore" title="What’s here? Show places around this spot">✨</button>
-      <button class="fab" id="fabAdd" title="Add a place" aria-label="Add a place">＋</button>
     </div>
   </div>
   <aside class="sidebar">
@@ -1097,7 +1097,14 @@
   }
 
   function lastTripId() {
-    // Default new places onto the most recently used trip — cheap "I'm on this trip now" mode
+    // Best guess for "which trip am I on?":
+    // 1) a trip whose date range includes today; 2) the trip of the last place added; 3) none
+    var now = new Date();
+    var iso = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    var current = trips.find(function (t) {
+      return t.start && iso >= t.start && iso <= (t.end || t.start);
+    });
+    if (current) return current.id;
     if (!places.length) return '';
     var last = places[places.length - 1];
     return (last.tripId && tripById(last.tripId)) ? last.tripId : '';
@@ -1127,11 +1134,13 @@
       } else { tripId = ''; }
     }
 
+    var chosenTrip = tripId ? tripById(tripId) : null;
     var place = {
       id: uid(), name: name, lat: d.lat, lng: d.lng,
       city: d.city || '', country: d.country || '',
       cat: d.cat, status: d.status, rating: null,
       added: today(), tripId: tripId || '',
+      visited: (chosenTrip && chosenTrip.start) ? chosenTrip.start : '',
       nextTime: nextTime || '', tags: tags,
       gRating: d.gRating, gCount: d.gCount, gMapsUri: d.gMapsUri,
       memories: note ? [{ date: today(), text: note }] : []
@@ -1395,7 +1404,9 @@
       ? p.memories.length + (p.memories.length === 1 ? ' memory' : ' memories') : '';
     var photoCount = (p.photos && p.photos.length)
       ? p.photos.length + (p.photos.length === 1 ? ' photo' : ' photos') : '';
-    var meta = [CAT[p.cat] ? CAT[p.cat].label : '', trip ? trip.name : '', memoCount, photoCount].filter(Boolean).join(' · ');
+    var visitedShort = p.visited
+      ? new Date(p.visited + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
+    var meta = [CAT[p.cat] ? CAT[p.cat].label : '', visitedShort, trip ? trip.name : '', memoCount, photoCount].filter(Boolean).join(' · ');
     var snippet = '';
     if (q) {
       var hit = (p.memories || []).find(function (m) { return m.text.toLowerCase().indexOf(q) !== -1; });
@@ -1823,7 +1834,12 @@
       '<textarea class="memo" id="draftNext" style="min-height:52px;" placeholder="Cash only · get there before 9am · order the special"></textarea></div>' +
 
       '<div><label class="field-label" for="draftTags">Tags <span class="soft">(comma separated)</span></label>' +
-      '<input class="text-input" id="draftTags" placeholder="honeymoon, rooftop, date night, best-of"></div>' +
+      '<input class="text-input" id="draftTags" placeholder="honeymoon, rooftop, date night, best-of">' +
+      (allTags().length ? '<div class="tag-row" style="margin-top:8px;">' +
+        allTags().slice(0, 8).map(function (tg) {
+          return '<button class="chip" data-sugtag="' + esc(tg) + '" style="font-size:0.75rem;">+ #' + esc(tg) + '</button>';
+        }).join('') + '</div>' : '') +
+      '</div>' +
 
       '<div class="btn-row"><button class="btn-primary" id="saveDraft">Pin it</button></div>' +
       '</div>';
@@ -1848,6 +1864,16 @@
     if (d.note) noteEl.value = d.note;
     if (d.nextTime) nextEl.value = d.nextTime;
     if (d.tags) document.getElementById('draftTags').value = d.tags;
+    body.querySelectorAll('[data-sugtag]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var inp = document.getElementById('draftTags');
+        var cur = parseTags(inp.value);
+        var tg = b.getAttribute('data-sugtag');
+        if (!cur.some(function (x) { return x.toLowerCase() === tg.toLowerCase(); })) cur.push(tg);
+        inp.value = cur.join(', ');
+        persistAddInputs();
+      });
+    });
     if (!d.name) document.getElementById('draftName').focus();
     else noteEl.focus();
   }
@@ -1885,7 +1911,9 @@
     var html = '<div class="card-pane">' +
       '<div class="card-top"><button class="back-btn" id="backBtn">← All places</button></div>' +
       '<div><h2><span class="cdot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:8px;"></span>' + esc(p.name) + '</h2>' +
-      '<div class="card-sub" style="margin-top:4px;">' + esc(loc || 'Pinned spot') + ' · added ' + esc(p.added) + '</div>' +
+      '<div class="card-sub" style="margin-top:4px;">' + esc(loc || 'Pinned spot') +
+      (p.visited ? ' · visited ' + esc(new Date(p.visited + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })) : '') +
+      ' · added ' + esc(p.added) + '</div>' +
       (p.gRating ? '<div class="card-sub" style="margin-top:2px;"><span class="g-badge">★ ' + p.gRating.toFixed(1) + '</span>' +
         (p.gCount ? ' · ' + Number(p.gCount).toLocaleString() + ' Google reviews' : '') + '</div>' : '') +
       '</div>';
@@ -1905,6 +1933,9 @@
 
     html += '<div><label class="field-label" for="detailTrip">Trip</label>' +
       '<select class="trip-select" id="detailTrip">' + tripOptionsHtml(p.tripId, false) + '</select></div>';
+
+    html += '<div><label class="field-label" for="visitedDate">When were you here? <span class="soft">(optional)</span></label>' +
+      '<input class="text-input" type="date" id="visitedDate" value="' + esc(p.visited || '') + '"></div>';
 
     if (p.status === 'been') {
       html += '<div><span class="field-label">Your review</span><div class="seg" id="detailRating">' +
@@ -1931,8 +1962,16 @@
       }).join('') +
       ((p.tags && p.tags.length) ? '' : '<span class="card-sub">None yet — tags cut across everything: “honeymoon”, “rooftop”, “take Mom here”.</span>') +
       '</div>' +
-      '<div class="tag-add-row"><input class="text-input" id="newTags" placeholder="Add tags, comma separated">' +
-      '<button class="btn-quiet" id="addTags">Add</button></div></div>';
+      '<div class="tag-add-row"><input class="text-input" id="newTags" placeholder="Type a tag, hit return">' +
+      '<button class="btn-quiet" id="addTags">Add</button></div>' +
+      (function () {
+        var sugs = allTags().filter(function (tg) { return !hasTag(p, tg); }).slice(0, 8);
+        return sugs.length ? '<div class="tag-row" style="margin-top:8px;">' +
+          sugs.map(function (tg) {
+            return '<button class="chip" data-sugtag="' + esc(tg) + '" style="font-size:0.75rem;">+ #' + esc(tg) + '</button>';
+          }).join('') + '</div>' : '';
+      })() +
+      '</div>';
 
     html += '<div><label class="field-label nexttime-label" for="nextTime">Note for next time</label>';
     html += '<textarea class="memo" id="nextTime" style="min-height:52px;background:#FBF6EA;border-color:#EADFC4;" ' +
@@ -1963,7 +2002,15 @@
       });
     });
     document.getElementById('detailTrip').addEventListener('change', function (e) {
-      p.tripId = e.target.value; savePlaces(); renderDetail();
+      p.tripId = e.target.value;
+      var tSel = p.tripId && tripById(p.tripId);
+      if (tSel && tSel.start && !p.visited) p.visited = tSel.start;
+      savePlaces(); renderDetail();
+    });
+    document.getElementById('visitedDate').addEventListener('change', function (e) {
+      p.visited = e.target.value;
+      savePlaces();
+      toast(p.visited ? 'Date saved' : 'Date cleared');
     });
     var ratingSeg = document.getElementById('detailRating');
     if (ratingSeg) {
@@ -1992,6 +2039,14 @@
     body.querySelectorAll('[data-deltag]').forEach(function (b) {
       b.addEventListener('click', function () {
         p.tags.splice(parseInt(b.getAttribute('data-deltag'), 10), 1);
+        savePlaces(); renderDetail();
+      });
+    });
+    body.querySelectorAll('[data-sugtag]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var tg = b.getAttribute('data-sugtag');
+        p.tags = p.tags || [];
+        if (!hasTag(p, tg)) p.tags.push(tg);
         savePlaces(); renderDetail();
       });
     });

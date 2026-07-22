@@ -652,7 +652,7 @@
       <button class="fab" id="fabAdd" title="Add a place" aria-label="Add a place">＋</button>
       <button class="fab secondary" id="fabExplore" title="What’s here? Show places around this spot">✨</button>
       <div class="fab-menu" id="fabMenu" hidden>
-        <button id="fabSearch">🔍 Search a place</button>
+        <button id="fabSearch">🔍 Search by name</button>
         <button id="fabPinMe">📍 Pin where I am right now</button>
         <button id="fabPinCenter">🎯 Pin the center of the map</button>
       </div>
@@ -665,7 +665,7 @@
       <button class="tab" data-tab="passport">Passport</button>
       <button class="add-mem-btn" id="addMemoryBtn">＋ Add Memory</button>
       <div class="fab-menu add-menu" id="addMenu" hidden>
-        <button id="amSearch">🔍 Search a place</button>
+        <button id="amSearch">🔍 Search by name</button>
         <button id="amPinMe">📍 Pin where I am right now</button>
         <button id="amPinCenter">🎯 Pin the center of the map</button>
       </div>
@@ -1200,8 +1200,12 @@
     };
     clearDraftMarker();
     draftMarker = L.circleMarker([base.lat, base.lng], {
-      radius: 9, color: '#16211C', weight: 2, fillColor: '#FBFBF9', fillOpacity: 1, dashArray: '3 3'
+      radius: 9, color: '#16211C', weight: 2, fillColor: '#FBFBF9', fillOpacity: 1, dashArray: '3 3',
+      bubblingMouseEvents: false
     }).addTo(map);
+    draftMarker.bindTooltip(base.name || 'New pin', {
+      permanent: true, direction: 'top', offset: [0, -10], className: 'pin-label'
+    });
     map.flyTo([base.lat, base.lng], Math.max(map.getZoom(), base.custom ? map.getZoom() : 15), { duration: 0.8 });
     render();
   }
@@ -2012,6 +2016,11 @@
         inp.value = cur.join(', ');
         persistAddInputs();
       });
+    });
+    // Live-update the map label as the name is typed
+    document.getElementById('draftName').addEventListener('input', function (e) {
+      d.name = e.target.value;
+      if (draftMarker) draftMarker.setTooltipContent(e.target.value.trim() || 'New pin');
     });
     // Desktop only: auto-focus is helpful with a hardware keyboard, but on phones it
     // pops the keyboard and shoves the card's name/category off-screen.

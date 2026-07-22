@@ -619,7 +619,7 @@
   @media (max-width: 760px) {
     .main { flex-direction: column; }
     .map-wrap { flex: 0 0 auto; }
-    #map { height: 42vh; min-height: 0; transition: height 0.25s ease; }
+    #map { height: 42vh; min-height: 0; transition: height 0.32s cubic-bezier(0.22, 0.61, 0.36, 1); }
     /* Card modes (add/detail/trip): small map so there's room to type */
     body.compact-map #map { height: 21vh; }
     /* Scrolling the list: map collapses to a sliver so the list gets the screen */
@@ -2908,27 +2908,36 @@
   }
 
   // ---------- Bottom-sheet: scrolling the list shrinks the map, top expands it ----------
+  // Finger-driven, not scroll-driven: swipe up on the panel raises it (any tab,
+  // any list length); a deliberate pull-down while at the top settles it back.
   var sheetTimer = null;
-  body.addEventListener('scroll', function () {
+  function setSheet(on) {
+    if (document.body.classList.contains('sheet-up') === on) return;
+    document.body.classList.toggle('sheet-up', on);
+    clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(function () { map.invalidateSize(); }, 340);
+  }
+  var sidebarEl = document.querySelector('.sidebar');
+  var sheetY = null, sheetStartScroll = 0;
+  sidebarEl.addEventListener('touchstart', function (e) {
     if (window.innerWidth > 760) return;
+    sheetY = e.touches[0].clientY;
+    sheetStartScroll = body.scrollTop;
+  }, { passive: true });
+  sidebarEl.addEventListener('touchmove', function (e) {
+    if (sheetY === null || window.innerWidth > 760) return;
     if (document.body.classList.contains('compact-map')) return; // card modes manage the map themselves
+    var dy = sheetY - e.touches[0].clientY; // positive = finger moving up
     var up = document.body.classList.contains('sheet-up');
-    var next = up;
-    if (!up) {
-      // Only collapse if the list will STILL be scrolled after the panel grows —
-      // otherwise the scroll position clamps to 0 and the sheet bounces right back.
-      var growth = Math.round(window.innerHeight * 0.32); // map 42vh -> 10vh
-      var slackAfterGrowth = (body.scrollHeight - body.clientHeight - growth) - body.scrollTop;
-      if (body.scrollTop > 30 && slackAfterGrowth > 20) next = true;
-    } else if (body.scrollTop <= 2) {
-      next = false;
-    }
-    if (next !== up) {
-      document.body.classList.toggle('sheet-up', next);
-      clearTimeout(sheetTimer);
-      sheetTimer = setTimeout(function () { map.invalidateSize(); }, 280);
+    if (!up && dy > 25) {
+      setSheet(true);
+      sheetY = e.touches[0].clientY;
+    } else if (up && dy < -25 && body.scrollTop <= 0 && sheetStartScroll <= 0) {
+      setSheet(false);
+      sheetY = e.touches[0].clientY;
     }
   }, { passive: true });
+  sidebarEl.addEventListener('touchend', function () { sheetY = null; }, { passive: true });
 
   // ---------- Map action buttons ----------
   var fabMenu = document.getElementById('fabMenu');

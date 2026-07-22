@@ -1858,8 +1858,8 @@
     });
     document.getElementById('saveTrip').addEventListener('click', function () {
       autoSaveTrip(t);
-      toast('Trip saved');
-      render();
+      toast('Trip saved ✓');
+      // no re-render: stay exactly where you are
     });
     var wrapBtn = document.getElementById('wrapBtn');
     if (wrapBtn) wrapBtn.addEventListener('click', function () {

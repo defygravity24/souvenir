@@ -1874,8 +1874,12 @@
         persistAddInputs();
       });
     });
-    if (!d.name) document.getElementById('draftName').focus();
-    else noteEl.focus();
+    // Desktop only: auto-focus is helpful with a hardware keyboard, but on phones it
+    // pops the keyboard and shoves the card's name/category off-screen.
+    if (window.matchMedia('(min-width: 761px)').matches) {
+      if (!d.name) document.getElementById('draftName').focus();
+      else noteEl.focus();
+    }
   }
 
   function persistAddInputs() {

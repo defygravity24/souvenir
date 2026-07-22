@@ -2890,9 +2890,18 @@
   body.addEventListener('scroll', function () {
     if (window.innerWidth > 760) return;
     if (document.body.classList.contains('compact-map')) return; // card modes manage the map themselves
-    var cur = document.body.classList.contains('sheet-up');
-    var next = body.scrollTop > 30 ? true : (body.scrollTop <= 2 ? false : cur);
-    if (next !== cur) {
+    var up = document.body.classList.contains('sheet-up');
+    var next = up;
+    if (!up) {
+      // Only collapse if the list will STILL be scrolled after the panel grows —
+      // otherwise the scroll position clamps to 0 and the sheet bounces right back.
+      var growth = Math.round(window.innerHeight * 0.32); // map 42vh -> 10vh
+      var slackAfterGrowth = (body.scrollHeight - body.clientHeight - growth) - body.scrollTop;
+      if (body.scrollTop > 30 && slackAfterGrowth > 20) next = true;
+    } else if (body.scrollTop <= 2) {
+      next = false;
+    }
+    if (next !== up) {
       document.body.classList.toggle('sheet-up', next);
       clearTimeout(sheetTimer);
       sheetTimer = setTimeout(function () { map.invalidateSize(); }, 280);
